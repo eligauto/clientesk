@@ -1,0 +1,16 @@
+{
+  "name": "clientesk-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "hooks:pre": "tsx src/hooks/pre-tool.ts",
+    "hooks:post": "tsx src/hooks/post-tool.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
