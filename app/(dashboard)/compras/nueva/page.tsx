@@ -1,8 +1,24 @@
-export default function NuevaCompraPage() {
+import { prisma } from "@/lib/db";
+import { getTenantId } from "@/lib/tenant";
+import { NuevaCompraForm } from "./form";
+
+export default async function NuevaCompraPage({
+  searchParams,
+}: {
+  searchParams: { proveedorId?: string };
+}) {
+  const tenantId = await getTenantId();
+
+  const suppliers = await prisma.supplier.findMany({
+    where: { tenantId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   return (
-    <div>
-      <h1 className="text-lg font-semibold text-gray-900">Nueva compra</h1>
-      <p className="text-sm text-gray-400 mt-1">Fase 2 — próximamente</p>
-    </div>
+    <NuevaCompraForm
+      suppliers={suppliers}
+      defaultProveedorId={searchParams.proveedorId}
+    />
   );
 }
