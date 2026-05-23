@@ -14,6 +14,7 @@ export default async function ProductosPage() {
     <ProductosClient
       initialProducts={products.map((p) => ({
         id: p.id,
+        sku: p.sku,
         name: p.name,
         unit: p.unit,
         priceList: p.priceList ? Number(p.priceList) : null,

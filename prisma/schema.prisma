@@ -93,6 +93,7 @@ model Supplier {
 model Product {
   id            String   @id @default(uuid())
   tenantId      String   @map("tenant_id")
+  sku           String?
   name          String
   unit          String?
   priceList     Decimal? @map("price_list") @db.Decimal(12, 2)
@@ -106,6 +107,7 @@ model Product {
   transactions Transaction[]
   purchases    Purchase[]
 
+  @@unique([tenantId, sku])
   @@map("products")
 }
 

@@ -17,7 +17,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const auth = await getAuth();
   if (!auth) return UNAUTHORIZED;
 
-  const { name, unit, priceList, priceCredit, priceTransfer, priceCash, notes } =
+  const { sku, name, unit, priceList, priceCredit, priceTransfer, priceCash, notes } =
     await req.json();
 
   if (!name?.trim()) {
@@ -30,6 +30,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const result = await prisma.product.updateMany({
     where: { id: params.id, tenantId: auth.tenantId },
     data: {
+      sku: sku?.trim() || null,
       name: name.trim(),
       unit: unit?.trim() || null,
       priceList: priceList || null,

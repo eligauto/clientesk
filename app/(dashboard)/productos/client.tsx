@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fmt } from "@/lib/utils";
 
 type Product = {
   id: string;
+  sku: string | null;
   name: string;
   unit: string | null;
   priceList: number | null;
@@ -16,6 +18,7 @@ type Product = {
 };
 
 const emptyForm = (): Omit<Product, "id"> => ({
+  sku: null,
   name: "",
   unit: "",
   priceList: null,
@@ -78,6 +81,26 @@ function ProductForm({
             required
             autoFocus
             placeholder="Llave inglesa"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Código</label>
+          <input
+            type="text"
+            value={form.sku ?? ""}
+            onChange={(e) => set("sku", e.target.value || null)}
+            placeholder="AA1"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Marca</label>
+          <input
+            type="text"
+            value={form.notes ?? ""}
+            onChange={(e) => set("notes", e.target.value || null)}
+            placeholder="ALNAT"
             className={inputClass}
           />
         </div>
@@ -174,12 +197,20 @@ export function ProductosClient({
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold text-gray-900">Productos</h1>
         {!showNew && (
-          <button
-            onClick={() => { setShowNew(true); setEditingId(null); }}
-            className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg"
-          >
-            + Nuevo
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href="/productos/importar"
+              className="text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              Importar
+            </Link>
+            <button
+              onClick={() => { setShowNew(true); setEditingId(null); }}
+              className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              + Nuevo
+            </button>
+          </div>
         )}
       </div>
 
@@ -205,7 +236,7 @@ export function ProductosClient({
             <li key={p.id}>
               {editingId === p.id ? (
                 <ProductForm
-                  initial={{ name: p.name, unit: p.unit, priceList: p.priceList, priceCredit: p.priceCredit, priceTransfer: p.priceTransfer, priceCash: p.priceCash, notes: p.notes }}
+                  initial={{ sku: p.sku, name: p.name, unit: p.unit, priceList: p.priceList, priceCredit: p.priceCredit, priceTransfer: p.priceTransfer, priceCash: p.priceCash, notes: p.notes }}
                   onSave={(data) => handleEdit(p.id, data)}
                   onCancel={() => { setEditingId(null); setSaveError(""); }}
                   loading={saving}
@@ -216,9 +247,9 @@ export function ProductosClient({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                      {p.unit && (
-                        <p className="text-xs text-gray-400 mt-0.5">{p.unit}</p>
-                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {[p.sku, p.notes, p.unit].filter(Boolean).join(" · ")}
+                      </p>
                     </div>
                     <button
                       onClick={() => { setEditingId(p.id); setShowNew(false); setSaveError(""); }}
