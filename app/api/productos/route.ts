@@ -5,11 +5,15 @@ import type { Product } from "@prisma/client";
 
 function serialise(p: Product) {
   return {
-    ...p,
+    id: p.id,
+    sku: p.sku,
+    name: p.name,
+    unit: p.unit,
     priceList: p.priceList ? Number(p.priceList) : null,
     priceCredit: p.priceCredit ? Number(p.priceCredit) : null,
     priceTransfer: p.priceTransfer ? Number(p.priceTransfer) : null,
     priceCash: p.priceCash ? Number(p.priceCash) : null,
+    notes: p.notes,
   };
 }
 
@@ -22,19 +26,28 @@ export const GET = withTenant(async (_req, tenantId) => {
 });
 
 export const POST = withTenant(async (req, tenantId) => {
-  const { name, unit, priceList, priceCredit, priceTransfer, priceCash, notes } =
-    await req.json();
+  const {
+    sku,
+    name,
+    unit,
+    priceList,
+    priceCredit,
+    priceTransfer,
+    priceCash,
+    notes,
+  } = await req.json();
 
   if (!name?.trim()) {
     return NextResponse.json(
       { error: "El nombre es requerido", code: "VALIDATION_ERROR" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const product = await prisma.product.create({
     data: {
       tenantId,
+      sku: sku?.trim() || null,
       name: name.trim(),
       unit: unit?.trim() || null,
       priceList: priceList || null,
