@@ -407,12 +407,12 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 - [x] Generación de imagen PNG del estado de cuenta — `html-to-image`, botón en detalle de cliente, tabla con pendientes + totales
 - [x] PWA: manifest + service worker — íconos 192/512, shortcuts, meta tags iOS, SW cache-first para shell
 
-### Fase 3 — Polish MVP (2–3 días)
-- [ ] Buscadores en listas
-- [ ] Validaciones de formularios
-- [ ] Estados vacíos y manejo de errores
-- [ ] Testing básico de flujos críticos
-- [ ] Deploy en Vercel + Railway
+### Fase 3 — Polish MVP (2–3 días) ✅ Completada
+- [x] Buscadores en listas — SearchInput con debounce en clientes, proveedores y productos; Combobox async en ventas/compras
+- [x] Validaciones de formularios — cliente/servidor en todas las rutas; mensajes de error en rojo; botones deshabilitados durante carga
+- [x] Estados vacíos y manejo de errores — empty states en todas las listas; feedback visual inmediato en formularios
+- [x] Testing básico de flujos críticos — Vitest (27 tests): utils, validación de venta y validación de pago parcial; build de producción limpio
+- [ ] Deploy en Vercel + Railway — `vercel.json` creado; pendiente: configurar env vars en Vercel dashboard y conectar Railway DB
 
 ### Fase 4 — Multi-tenant real (futuro)
 - [ ] Onboarding self-service
