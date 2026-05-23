@@ -19,11 +19,31 @@ function serialise(p: Product) {
   };
 }
 
-export const GET = withTenant(async (_req, tenantId) => {
+const PAGE_SIZE = 50;
+
+export const GET = withTenant(async (req, tenantId) => {
+  const url = new URL(req.url);
+  const q    = url.searchParams.get("q")?.trim() ?? "";
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+
+  const where = {
+    tenantId,
+    ...(q ? {
+      OR: [
+        { name: { contains: q, mode: "insensitive" as const } },
+        { sku:  { contains: q, mode: "insensitive" as const } },
+        { notes: { contains: q, mode: "insensitive" as const } },
+      ],
+    } : {}),
+  };
+
   const products = await prisma.product.findMany({
-    where: { tenantId },
+    where,
     orderBy: { name: "asc" },
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
   });
+
   return NextResponse.json(products.map(serialise));
 });
 
