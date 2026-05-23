@@ -10,6 +10,7 @@ type Customer = { id: string; name: string };
 type Product = {
   id: string;
   name: string;
+  sku: string | null;
   unit: string | null;
   priceList: number | null;
   priceCredit: number | null;
@@ -36,11 +37,9 @@ const inputClass =
 
 export function NuevaVentaForm({
   customers,
-  products,
   defaultClienteId,
 }: {
   customers: Customer[];
-  products: Product[];
   defaultClienteId?: string;
 }) {
   const router = useRouter();
@@ -48,6 +47,7 @@ export function NuevaVentaForm({
 
   const [clienteId, setClienteId] = useState(defaultClienteId ?? "");
   const [productoId, setProductoId] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [priceType, setPriceType] = useState("lista");
   const [unitPrice, setUnitPrice] = useState("");
@@ -58,14 +58,44 @@ export function NuevaVentaForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Auto-fill unit price when product or price type changes
+  // Busca productos contra la API (async)
+  async function searchProductos(q: string) {
+    if (q.length < 2) return [];
+    const res = await fetch(`/api/productos?q=${encodeURIComponent(q)}&page=1`);
+    if (!res.ok) return [];
+    const data: Product[] = await res.json();
+    return data.map((p) => ({
+      id: p.id,
+      label: p.name,
+      sub: p.sku ?? undefined,
+      // Guardamos los datos del producto para el autocomplete de precio
+      _product: p,
+    })) as any[];
+  }
+
+  function handleProductSelect(id: string) {
+    setProductoId(id);
+    // El Combobox async retiene el option seleccionado — necesitamos los datos del producto
+    // para el autocomplete. Los pedimos directamente a la API si no los tenemos.
+    if (!id) { setSelectedProduct(null); setUnitPrice(""); return; }
+    fetch(`/api/productos/${id}/precios`)
+      .then((r) => r.json())
+      .then((p: Product) => {
+        setSelectedProduct(p);
+        const field = PRICE_FIELDS[priceType];
+        const price = p[field] as number | null;
+        if (price != null) setUnitPrice(String(price));
+      })
+      .catch(() => {});
+  }
+
+  // Re-autocomplete precio cuando cambia el tipo de precio
   useEffect(() => {
-    const product = products.find((p) => p.id === productoId);
-    if (!product) return;
+    if (!selectedProduct) return;
     const field = PRICE_FIELDS[priceType];
-    const price = product[field] as number | null;
-    if (price !== null) setUnitPrice(String(price));
-  }, [productoId, priceType, products]);
+    const price = selectedProduct[field] as number | null;
+    if (price != null) setUnitPrice(String(price));
+  }, [priceType, selectedProduct]);
 
   const qty = parseFloat(quantity) || 0;
   const price = parseFloat(unitPrice) || 0;
@@ -137,10 +167,10 @@ export function NuevaVentaForm({
           Producto <span className="text-red-500">*</span>
         </label>
         <Combobox
-          options={products.map((p) => ({ id: p.id, label: p.name }))}
+          onSearch={searchProductos}
           value={productoId}
-          onChange={setProductoId}
-          placeholder="Buscar producto..."
+          onChange={handleProductSelect}
+          placeholder="Escribí nombre o código..."
           required
         />
       </div>
