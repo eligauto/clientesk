@@ -1,13 +1,27 @@
-export default function ProductosPage() {
+import { prisma } from "@/lib/db";
+import { getTenantId } from "@/lib/tenant";
+import { ProductosClient } from "./client";
+
+export default async function ProductosPage() {
+  const tenantId = await getTenantId();
+
+  const products = await prisma.product.findMany({
+    where: { tenantId },
+    orderBy: { name: "asc" },
+  });
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold text-gray-900">Productos</h1>
-        <button className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg">
-          + Nuevo
-        </button>
-      </div>
-      <p className="text-sm text-gray-400">Fase 1 — próximamente</p>
-    </div>
+    <ProductosClient
+      initialProducts={products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        unit: p.unit,
+        priceList: p.priceList ? Number(p.priceList) : null,
+        priceCredit: p.priceCredit ? Number(p.priceCredit) : null,
+        priceTransfer: p.priceTransfer ? Number(p.priceTransfer) : null,
+        priceCash: p.priceCash ? Number(p.priceCash) : null,
+        notes: p.notes,
+      }))}
+    />
   );
 }

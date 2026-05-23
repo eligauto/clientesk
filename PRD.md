@@ -395,11 +395,11 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 > **Nota de seguridad:** Next.js 14.x tiene CVEs conocidos (DoS en Image Optimizer, cache poisoning). Para producción, evaluar upgrade a Next.js 15/16 antes del deploy.
 
 ### Fase 1 — Core (1–2 semanas)
-- [ ] CRUD clientes
-- [ ] CRUD productos
-- [ ] Flujo completo nueva venta
-- [ ] Pagos parciales
-- [ ] Vista detalle de cliente con historial
+- [x] CRUD clientes — lista con búsqueda, nuevo, detalle, editar (`/clientes`, `/clientes/nuevo`, `/clientes/[id]`, `/clientes/[id]/editar`)
+- [x] CRUD productos — lista con inline create/edit (`/productos`)
+- [x] Flujo completo nueva venta — combobox cliente/producto, autocomplete de precio, pago inicial (`/transacciones/nueva`)
+- [x] Pagos parciales — desde detalle de transacción, con anulación de pago (`/transacciones/[id]`)
+- [x] Vista detalle de cliente con historial — stats (vendido/cobrado/debe) + lista de transacciones con badges
 
 ### Fase 2 — Proveedores + imagen WA (3–5 días)
 - [ ] CRUD proveedores
