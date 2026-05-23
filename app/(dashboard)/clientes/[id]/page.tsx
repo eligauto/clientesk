@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getTenantId } from "@/lib/tenant";
 import { SaldoBadge, StatusBadge } from "@/components/saldo-badge";
+import { EstadoCuentaBtn } from "@/components/estado-cuenta-btn";
 import { fmt, fmtDate } from "@/lib/utils";
 
 export default async function ClienteDetallePage({
@@ -90,12 +91,30 @@ export default async function ClienteDetallePage({
       </div>
 
       {/* Actions */}
-      <Link
-        href={`/transacciones/nueva?clienteId=${customer.id}`}
-        className="flex items-center justify-center w-full bg-indigo-600 text-white text-sm font-medium py-3 rounded-xl mb-6"
-      >
-        + Nueva venta
-      </Link>
+      <div className="space-y-2 mb-6">
+        <Link
+          href={`/transacciones/nueva?clienteId=${customer.id}`}
+          className="flex items-center justify-center w-full bg-indigo-600 text-white text-sm font-medium py-3 rounded-xl"
+        >
+          + Nueva venta
+        </Link>
+        <EstadoCuentaBtn
+          customerName={customer.name}
+          transactions={transactions.map((t) => ({
+            id: t.id,
+            date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
+            product: t.product,
+            quantity: Number(t.quantity),
+            unitPrice: Number(t.unitPrice),
+            totalAmount: Number(t.totalAmount),
+            amountPaid: Number(t.amountPaid),
+            balanceDue: Number(t.balanceDue),
+          }))}
+          totalVendido={totalVendido}
+          totalCobrado={totalCobrado}
+          saldo={saldo}
+        />
+      </div>
 
       {/* Transaction history */}
       <h2 className="text-sm font-medium text-gray-700 mb-3">

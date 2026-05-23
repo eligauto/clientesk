@@ -1,0 +1,336 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Combobox } from "@/components/combobox";
+import { fmt } from "@/lib/utils";
+
+type Supplier = { id: string; name: string };
+type Product = {
+  id: string;
+  name: string;
+  sku: string | null;
+  unit: string | null;
+  priceList: number | null;
+  priceCredit: number | null;
+  priceTransfer: number | null;
+  priceCash: number | null;
+};
+
+const PRICE_LABELS: Record<string, string> = {
+  lista: "Lista",
+  credito: "Crédito",
+  transferencia: "Transferencia",
+  contado: "Contado",
+};
+
+const PRICE_FIELDS: Record<string, keyof Product> = {
+  lista: "priceList",
+  credito: "priceCredit",
+  transferencia: "priceTransfer",
+  contado: "priceCash",
+};
+
+const inputClass =
+  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+
+export function NuevaCompraForm({
+  suppliers,
+  defaultProveedorId,
+}: {
+  suppliers: Supplier[];
+  defaultProveedorId?: string;
+}) {
+  const router = useRouter();
+  const today = new Date().toISOString().split("T")[0];
+
+  const [proveedorId, setProveedorId] = useState(defaultProveedorId ?? "");
+  const [productoId, setProductoId] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState("1");
+  const [priceType, setPriceType] = useState("lista");
+  const [unitPrice, setUnitPrice] = useState("");
+  const [commissionPct, setCommissionPct] = useState("0");
+  const [initialPayment, setInitialPayment] = useState("0");
+  const [paymentMethod, setPaymentMethod] = useState("efectivo");
+  const [notes, setNotes] = useState("");
+  const [date, setDate] = useState(today);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function searchProductos(q: string) {
+    if (q.length < 2) return [];
+    const res = await fetch(`/api/productos?q=${encodeURIComponent(q)}&page=1`);
+    if (!res.ok) return [];
+    const data: Product[] = await res.json();
+    return data.map((p) => ({
+      id: p.id,
+      label: p.name,
+      sub: p.sku ?? undefined,
+      _product: p,
+    })) as any[];
+  }
+
+  function handleProductSelect(id: string) {
+    setProductoId(id);
+    if (!id) { setSelectedProduct(null); setUnitPrice(""); return; }
+    fetch(`/api/productos/${id}/precios`)
+      .then((r) => r.json())
+      .then((p: Product) => {
+        setSelectedProduct(p);
+        const field = PRICE_FIELDS[priceType];
+        const price = p[field] as number | null;
+        if (price != null) setUnitPrice(String(price));
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const field = PRICE_FIELDS[priceType];
+    const price = selectedProduct[field] as number | null;
+    if (price != null) setUnitPrice(String(price));
+  }, [priceType, selectedProduct]);
+
+  const qty = parseFloat(quantity) || 0;
+  const price = parseFloat(unitPrice) || 0;
+  const payment = parseFloat(initialPayment) || 0;
+  const total = qty * price;
+  const balance = Math.max(0, total - payment);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proveedorId || !productoId) {
+      setError("Seleccioná un proveedor y un producto");
+      return;
+    }
+    setLoading(true);
+    setError("");
+
+    const res = await fetch("/api/compras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        supplierId: proveedorId,
+        productId: productoId,
+        quantity: qty,
+        priceType,
+        unitPrice: price,
+        commissionPct: parseFloat(commissionPct) || 0,
+        initialPayment: payment,
+        paymentMethod: payment > 0 ? paymentMethod : undefined,
+        notes: notes || undefined,
+        date,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? "Error al registrar la compra");
+      setLoading(false);
+      return;
+    }
+
+    router.push(`/proveedores/${proveedorId}`);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5 pb-8">
+      <div className="flex items-center gap-3">
+        <Link href={proveedorId ? `/proveedores/${proveedorId}` : "/proveedores"} className="text-gray-400 text-lg">
+          ←
+        </Link>
+        <h1 className="text-lg font-semibold text-gray-900">Nueva compra</h1>
+      </div>
+
+      {/* Proveedor */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Proveedor <span className="text-red-500">*</span>
+        </label>
+        <Combobox
+          options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
+          value={proveedorId}
+          onChange={setProveedorId}
+          placeholder="Buscar proveedor..."
+          required
+        />
+      </div>
+
+      {/* Producto */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Producto <span className="text-red-500">*</span>
+        </label>
+        <Combobox
+          onSearch={searchProductos}
+          value={productoId}
+          onChange={handleProductSelect}
+          placeholder="Escribí nombre o código..."
+          required
+        />
+      </div>
+
+      {/* Cantidad + tipo de precio */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Cantidad
+          </label>
+          <input
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            min="0.001"
+            step="any"
+            required
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Tipo de precio
+          </label>
+          <select
+            value={priceType}
+            onChange={(e) => setPriceType(e.target.value)}
+            className={inputClass}
+          >
+            {Object.entries(PRICE_LABELS).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Precio unitario */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Precio unitario
+        </label>
+        <input
+          type="number"
+          value={unitPrice}
+          onChange={(e) => setUnitPrice(e.target.value)}
+          min="0"
+          step="any"
+          required
+          placeholder="0.00"
+          className={inputClass}
+        />
+      </div>
+
+      {/* Total */}
+      {total > 0 && (
+        <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
+          <span className="text-sm text-gray-600">Total</span>
+          <span className="text-base font-semibold text-gray-900">{fmt(total)}</span>
+        </div>
+      )}
+
+      {/* Comisión cueva */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Comisión cueva (%)
+        </label>
+        <input
+          type="number"
+          value={commissionPct}
+          onChange={(e) => setCommissionPct(e.target.value)}
+          min="0"
+          max="100"
+          step="0.01"
+          placeholder="0"
+          className={inputClass}
+        />
+      </div>
+
+      {/* Pago inicial */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Pago inicial
+          </label>
+          <input
+            type="number"
+            value={initialPayment}
+            onChange={(e) => setInitialPayment(e.target.value)}
+            min="0"
+            step="any"
+            className={inputClass}
+          />
+        </div>
+        {payment > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Método
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className={inputClass}
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="cheque">Cheque</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Saldo resultante */}
+      {total > 0 && balance > 0 && (
+        <div className="bg-amber-50 rounded-xl px-4 py-3 flex justify-between items-center">
+          <span className="text-sm text-amber-700">Queda debiendo</span>
+          <span className="text-base font-semibold text-amber-700">{fmt(balance)}</span>
+        </div>
+      )}
+      {total > 0 && balance === 0 && (
+        <div className="bg-green-50 rounded-xl px-4 py-3 flex justify-between items-center">
+          <span className="text-sm text-green-700">Saldo</span>
+          <span className="text-base font-semibold text-green-700">Saldada ✓</span>
+        </div>
+      )}
+
+      {/* Fecha */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Fecha
+        </label>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required
+          className={inputClass}
+        />
+      </div>
+
+      {/* Notas */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Notas (opcional)
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className={`${inputClass} resize-none`}
+        />
+      </div>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading || !proveedorId || !productoId || !unitPrice || qty <= 0}
+        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+      >
+        {loading ? "Registrando..." : "Registrar compra"}
+      </button>
+    </form>
+  );
+}
