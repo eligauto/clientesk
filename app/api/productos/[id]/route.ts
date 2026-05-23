@@ -19,17 +19,29 @@ function serialise(p: Product) {
   };
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } },
+) {
   const auth = await getAuth();
   if (!auth) return UNAUTHORIZED;
 
-  const { sku, name, unit, costPrice, priceList, priceCredit, priceTransfer, priceCash, notes } =
-    await req.json();
+  const {
+    sku,
+    name,
+    unit,
+    costPrice,
+    priceList,
+    priceCredit,
+    priceTransfer,
+    priceCash,
+    notes,
+  } = await req.json();
 
   if (!name?.trim()) {
     return NextResponse.json(
       { error: "El nombre es requerido", code: "VALIDATION_ERROR" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -41,16 +53,18 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       name: name.trim(),
       unit: unit?.trim() || null,
       costPrice: costPrice || null,
-      priceList:     priceList     ?? calc.priceList,
-      priceCredit:   priceCredit   ?? calc.priceCredit,
+      priceList: priceList ?? calc.priceList,
+      priceCredit: priceCredit ?? calc.priceCredit,
       priceTransfer: priceTransfer ?? calc.priceTransfer,
-      priceCash:     priceCash     ?? calc.priceCash,
+      priceCash: priceCash ?? calc.priceCash,
       notes: notes?.trim() || null,
     },
   });
 
   if (result.count === 0) return NOT_FOUND;
 
-  const updated = await prisma.product.findFirst({ where: { id: params.id } });
+  const updated = await prisma.product.findFirst({
+    where: { id: params.id, tenantId: auth.tenantId },
+  });
   return NextResponse.json(serialise(updated!));
 }

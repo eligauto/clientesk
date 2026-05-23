@@ -13,7 +13,10 @@ export async function GET(_req: Request, { params }: Ctx) {
   });
   if (!customer) return NOT_FOUND;
 
-  return NextResponse.json({ ...customer, balanceDue: Number(customer.balanceDue) });
+  return NextResponse.json({
+    ...customer,
+    balanceDue: Number(customer.balanceDue),
+  });
 }
 
 export async function PUT(req: Request, { params }: Ctx) {
@@ -25,7 +28,7 @@ export async function PUT(req: Request, { params }: Ctx) {
   if (!name?.trim()) {
     return NextResponse.json(
       { error: "El nombre es requerido", code: "VALIDATION_ERROR" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -41,6 +44,11 @@ export async function PUT(req: Request, { params }: Ctx) {
 
   if (result.count === 0) return NOT_FOUND;
 
-  const updated = await prisma.customer.findFirst({ where: { id: params.id } });
-  return NextResponse.json({ ...updated, balanceDue: Number(updated!.balanceDue) });
+  const updated = await prisma.customer.findFirst({
+    where: { id: params.id, tenantId: auth.tenantId },
+  });
+  return NextResponse.json({
+    ...updated,
+    balanceDue: Number(updated!.balanceDue),
+  });
 }
