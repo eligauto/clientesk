@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getAuth, UNAUTHORIZED } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { calcPrices } from "@/lib/price-multipliers";
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 200;
 
 type Row = {
-  sku: string;
+  sku: string | null;
   name: string;
   notes: string | null;
-  priceList: number | null;
+  costPrice: number | null;
 };
 
 function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
@@ -17,7 +18,6 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: "" });
 
-  // Find header row (CODIGO / DESCRIPCION)
   const headerIdx = raw.findIndex(
     (row) =>
       row.some((c) => String(c).trim().toUpperCase() === "CODIGO") &&
@@ -27,10 +27,10 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
     return { rows: [], errors: ["No se encontró la fila de encabezados (CODIGO, DESCRIPCION)"] };
   }
 
-  const header = raw[headerIdx].map((c) => String(c).trim().toUpperCase());
+  const header    = raw[headerIdx].map((c) => String(c).trim().toUpperCase());
   const codigoIdx = header.indexOf("CODIGO");
-  const descIdx = header.indexOf("DESCRIPCION");
-  const marcaIdx = header.indexOf("MARCA");
+  const descIdx   = header.indexOf("DESCRIPCION");
+  const marcaIdx  = header.indexOf("MARCA");
   const precioIdx = header.indexOf("PRECIO");
 
   if (codigoIdx === -1 || descIdx === -1) {
@@ -41,8 +41,8 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
   const errors: string[] = [];
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
-    const r = raw[i];
-    const sku = String(r[codigoIdx] ?? "").trim();
+    const r    = raw[i];
+    const sku  = String(r[codigoIdx] ?? "").trim();
     const name = String(r[descIdx] ?? "").trim();
     if (!sku && !name) continue;
     if (!name) {
@@ -50,20 +50,20 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
       continue;
     }
 
-    let priceList: number | null = null;
+    let costPrice: number | null = null;
     if (precioIdx !== -1) {
-      const raw_price = r[precioIdx];
-      if (raw_price !== "" && raw_price != null) {
-        const n = typeof raw_price === "number" ? raw_price : parseFloat(String(raw_price).replace(",", "."));
-        if (!isNaN(n) && n > 0) priceList = n;
+      const rp = r[precioIdx];
+      if (rp !== "" && rp != null) {
+        const n = typeof rp === "number" ? rp : parseFloat(String(rp).replace(",", "."));
+        if (!isNaN(n) && n > 0) costPrice = n;
       }
     }
 
     rows.push({
-      sku: sku || null as any,
+      sku: sku || null,
       name,
       notes: marcaIdx !== -1 ? (String(r[marcaIdx] ?? "").trim() || null) : null,
-      priceList,
+      costPrice,
     });
   }
 
@@ -95,25 +95,49 @@ export async function POST(req: NextRequest) {
   if (preview) {
     return NextResponse.json({
       total: rows.length,
-      sample: rows.slice(0, 5),
+      sample: rows.slice(0, 5).map((r) => ({
+        sku: r.sku,
+        name: r.name,
+        notes: r.notes,
+        costPrice: r.costPrice,
+        ...calcPrices(r.costPrice),
+      })),
       warnings: errors.slice(0, 5),
     });
   }
 
-  // Chunked createMany — skips duplicates by (tenantId, sku)
-  let created = 0;
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE).map((r) => ({
-      tenantId: auth.tenantId,
-      sku: r.sku ?? null,
-      name: r.name,
-      notes: r.notes,
-      priceList: r.priceList,
-    }));
-    const result = await prisma.product.createMany({ data: batch, skipDuplicates: true });
-    created += result.count;
+  // Products with sku: upsert in batches (updates prices on reimport)
+  // Products without sku: createMany + skipDuplicates
+  const withSku    = rows.filter((r) => r.sku);
+  const withoutSku = rows.filter((r) => !r.sku);
+
+  let processed = 0;
+
+  for (let i = 0; i < withSku.length; i += BATCH_SIZE) {
+    const batch = withSku.slice(i, i + BATCH_SIZE);
+    await prisma.$transaction(
+      batch.map((r) => {
+        const prices = calcPrices(r.costPrice);
+        return prisma.product.upsert({
+          where: { tenantId_sku: { tenantId: auth.tenantId, sku: r.sku! } },
+          create: { tenantId: auth.tenantId, sku: r.sku, name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices },
+          update: { name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices },
+        });
+      })
+    );
+    processed += batch.length;
   }
 
-  const skipped = rows.length - created;
-  return NextResponse.json({ total: rows.length, created, skipped });
+  if (withoutSku.length > 0) {
+    const result = await prisma.product.createMany({
+      data: withoutSku.map((r) => {
+        const prices = calcPrices(r.costPrice);
+        return { tenantId: auth.tenantId, name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices };
+      }),
+      skipDuplicates: true,
+    });
+    processed += result.count;
+  }
+
+  return NextResponse.json({ total: rows.length, processed });
 }

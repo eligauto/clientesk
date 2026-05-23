@@ -43,6 +43,7 @@ export default async function ProductosPage({
         sku: p.sku,
         name: p.name,
         unit: p.unit,
+        costPrice: p.costPrice ? Number(p.costPrice) : null,
         priceList: p.priceList ? Number(p.priceList) : null,
         priceCredit: p.priceCredit ? Number(p.priceCredit) : null,
         priceTransfer: p.priceTransfer ? Number(p.priceTransfer) : null,

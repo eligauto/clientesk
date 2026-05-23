@@ -96,6 +96,7 @@ model Product {
   sku           String?
   name          String
   unit          String?
+  costPrice     Decimal? @map("cost_price") @db.Decimal(12, 2)
   priceList     Decimal? @map("price_list") @db.Decimal(12, 2)
   priceCredit   Decimal? @map("price_credit") @db.Decimal(12, 2)
   priceTransfer Decimal? @map("price_transfer") @db.Decimal(12, 2)

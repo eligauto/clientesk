@@ -10,6 +10,7 @@ type Product = {
   sku: string | null;
   name: string;
   unit: string | null;
+  costPrice: number | null;
   priceList: number | null;
   priceCredit: number | null;
   priceTransfer: number | null;
@@ -17,10 +18,23 @@ type Product = {
   notes: string | null;
 };
 
+const MULT = { priceList: 1.8, priceCredit: 2.07, priceTransfer: 1.7, priceCash: 1.62 };
+function round2(n: number) { return Math.round(n * 100) / 100; }
+function calcFromCost(cost: number | null): Pick<Product, "priceList" | "priceCredit" | "priceTransfer" | "priceCash"> {
+  if (!cost || cost <= 0) return { priceList: null, priceCredit: null, priceTransfer: null, priceCash: null };
+  return {
+    priceList:     round2(cost * MULT.priceList),
+    priceCredit:   round2(cost * MULT.priceCredit),
+    priceTransfer: round2(cost * MULT.priceTransfer),
+    priceCash:     round2(cost * MULT.priceCash),
+  };
+}
+
 const emptyForm = (): Omit<Product, "id"> => ({
   sku: null,
   name: "",
   unit: "",
+  costPrice: null,
   priceList: null,
   priceCredit: null,
   priceTransfer: null,
@@ -50,10 +64,25 @@ function ProductForm({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function priceInput(label: string, key: keyof Omit<Product, "id">) {
+  function setCost(raw: string) {
+    const cost = raw ? Number(raw) : null;
+    setForm((f) => ({ ...f, costPrice: cost, ...calcFromCost(cost) }));
+  }
+
+  function priceInput(
+    label: string,
+    key: "priceList" | "priceCredit" | "priceTransfer" | "priceCash",
+    mult: number,
+  ) {
+    const isCalc = form.costPrice != null && form[key] === round2(form.costPrice * mult);
     return (
       <div>
-        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+        <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+          {label}
+          {isCalc && (
+            <span className="text-indigo-400 font-mono">×{mult}</span>
+          )}
+        </label>
         <input
           type="number"
           value={(form[key] as number | null) ?? ""}
@@ -61,7 +90,7 @@ function ProductForm({
           min="0"
           step="any"
           placeholder="—"
-          className={inputClass}
+          className={`${inputClass} ${isCalc ? "bg-indigo-50" : ""}`}
         />
       </div>
     );
@@ -114,10 +143,33 @@ function ProductForm({
             className={inputClass}
           />
         </div>
-        {priceInput("Precio lista", "priceList")}
-        {priceInput("Precio crédito", "priceCredit")}
-        {priceInput("Precio transf.", "priceTransfer")}
-        {priceInput("Precio contado", "priceCash")}
+
+        {/* Precio de costo — dispara el auto-cálculo */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Precio de costo
+          </label>
+          <input
+            type="number"
+            value={form.costPrice ?? ""}
+            onChange={(e) => setCost(e.target.value)}
+            min="0"
+            step="any"
+            placeholder="Precio base"
+            className={`${inputClass} font-medium`}
+          />
+        </div>
+
+        <div className="col-span-2">
+          <p className="text-xs text-gray-400 -mt-1">
+            Al ingresar el costo se calculan los precios automáticamente. Podés editarlos.
+          </p>
+        </div>
+
+        {priceInput("Lista",       "priceList",     MULT.priceList)}
+        {priceInput("Crédito",     "priceCredit",   MULT.priceCredit)}
+        {priceInput("Transf.",     "priceTransfer", MULT.priceTransfer)}
+        {priceInput("Contado",     "priceCash",     MULT.priceCash)}
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -283,7 +335,7 @@ export function ProductosClient({
             <li key={p.id}>
               {editingId === p.id ? (
                 <ProductForm
-                  initial={{ sku: p.sku, name: p.name, unit: p.unit, priceList: p.priceList, priceCredit: p.priceCredit, priceTransfer: p.priceTransfer, priceCash: p.priceCash, notes: p.notes }}
+                  initial={{ sku: p.sku, name: p.name, unit: p.unit, costPrice: p.costPrice, priceList: p.priceList, priceCredit: p.priceCredit, priceTransfer: p.priceTransfer, priceCash: p.priceCash, notes: p.notes }}
                   onSave={(data) => handleEdit(p.id, data)}
                   onCancel={() => { setEditingId(null); setSaveError(""); }}
                   loading={saving}
@@ -305,14 +357,20 @@ export function ProductosClient({
                       Editar
                     </button>
                   </div>
-                  <div className="grid grid-cols-4 gap-1 mt-3">
+                  <div className="grid grid-cols-5 gap-1 mt-3">
+                    {p.costPrice != null && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400">Costo</p>
+                        <p className="text-xs font-medium text-gray-500">{fmt(p.costPrice)}</p>
+                      </div>
+                    )}
                     {[
-                      { label: "Lista", val: p.priceList },
+                      { label: "Lista",   val: p.priceList },
                       { label: "Crédito", val: p.priceCredit },
                       { label: "Transf.", val: p.priceTransfer },
                       { label: "Contado", val: p.priceCash },
                     ].map(({ label, val }) => (
-                      <div key={label} className="text-center">
+                      <div key={label} className={`text-center ${p.costPrice == null ? "col-span-1" : ""}`}>
                         <p className="text-xs text-gray-400">{label}</p>
                         <p className="text-xs font-medium text-gray-700">
                           {val !== null ? fmt(val) : "—"}

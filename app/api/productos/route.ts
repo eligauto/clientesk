@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { calcPrices } from "@/lib/price-multipliers";
 import type { Product } from "@prisma/client";
 
 function serialise(p: Product) {
@@ -9,6 +10,7 @@ function serialise(p: Product) {
     sku: p.sku,
     name: p.name,
     unit: p.unit,
+    costPrice: p.costPrice ? Number(p.costPrice) : null,
     priceList: p.priceList ? Number(p.priceList) : null,
     priceCredit: p.priceCredit ? Number(p.priceCredit) : null,
     priceTransfer: p.priceTransfer ? Number(p.priceTransfer) : null,
@@ -26,16 +28,8 @@ export const GET = withTenant(async (_req, tenantId) => {
 });
 
 export const POST = withTenant(async (req, tenantId) => {
-  const {
-    sku,
-    name,
-    unit,
-    priceList,
-    priceCredit,
-    priceTransfer,
-    priceCash,
-    notes,
-  } = await req.json();
+  const { sku, name, unit, costPrice, priceList, priceCredit, priceTransfer, priceCash, notes } =
+    await req.json();
 
   if (!name?.trim()) {
     return NextResponse.json(
@@ -44,16 +38,18 @@ export const POST = withTenant(async (req, tenantId) => {
     );
   }
 
+  const calc = calcPrices(costPrice || null);
   const product = await prisma.product.create({
     data: {
       tenantId,
       sku: sku?.trim() || null,
       name: name.trim(),
       unit: unit?.trim() || null,
-      priceList: priceList || null,
-      priceCredit: priceCredit || null,
-      priceTransfer: priceTransfer || null,
-      priceCash: priceCash || null,
+      costPrice: costPrice || null,
+      priceList:     priceList     ?? calc.priceList,
+      priceCredit:   priceCredit   ?? calc.priceCredit,
+      priceTransfer: priceTransfer ?? calc.priceTransfer,
+      priceCash:     priceCash     ?? calc.priceCash,
       notes: notes?.trim() || null,
     },
   });

@@ -9,6 +9,7 @@ type PreviewRow = {
   sku: string | null;
   name: string;
   notes: string | null;
+  costPrice: number | null;
   priceList: number | null;
 };
 
@@ -20,8 +21,7 @@ type PreviewResult = {
 
 type ImportResult = {
   total: number;
-  created: number;
-  skipped: number;
+  processed: number;
 };
 
 export default function ImportarProductosPage() {
@@ -162,8 +162,9 @@ export default function ImportarProductosPage() {
                   <tr>
                     <th className="px-3 py-2 text-left text-gray-500 font-medium">Código</th>
                     <th className="px-3 py-2 text-left text-gray-500 font-medium">Descripción</th>
-                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Marca</th>
-                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Precio</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Costo</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Lista ×1.8</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Contado ×1.62</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -171,9 +172,16 @@ export default function ImportarProductosPage() {
                     <tr key={i}>
                       <td className="px-3 py-2 text-gray-500 font-mono">{row.sku ?? "—"}</td>
                       <td className="px-3 py-2 text-gray-900">{row.name}</td>
-                      <td className="px-3 py-2 text-gray-500">{row.notes ?? "—"}</td>
-                      <td className="px-3 py-2 text-right text-gray-900">
+                      <td className="px-3 py-2 text-right text-gray-500">
+                        {row.costPrice != null ? fmt(row.costPrice) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-900 font-medium">
                         {row.priceList != null ? fmt(row.priceList) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-700">
+                        {row.priceList != null && row.costPrice != null
+                          ? fmt(Math.round(row.costPrice * 1.62 * 100) / 100)
+                          : "—"}
                       </td>
                     </tr>
                   ))}
@@ -204,14 +212,12 @@ export default function ImportarProductosPage() {
         <div className="space-y-4">
           <div className="bg-green-50 rounded-xl p-5 text-center space-y-1">
             <p className="text-2xl font-bold text-green-700">
-              {result.created.toLocaleString("es-AR")}
+              {result.processed.toLocaleString("es-AR")}
             </p>
-            <p className="text-sm font-medium text-green-800">productos importados</p>
-            {result.skipped > 0 && (
-              <p className="text-xs text-green-600 mt-1">
-                {result.skipped.toLocaleString("es-AR")} ya existían y fueron omitidos
-              </p>
-            )}
+            <p className="text-sm font-medium text-green-800">productos procesados</p>
+            <p className="text-xs text-green-600 mt-1">
+              Nuevos creados y existentes actualizados con precios calculados
+            </p>
           </div>
 
           <div className="flex gap-3">
