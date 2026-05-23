@@ -402,10 +402,10 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 - [x] Vista detalle de cliente con historial — stats (vendido/cobrado/debe) + lista de transacciones con badges
 
 ### Fase 2 — Proveedores + imagen WA (3–5 días)
-- [ ] CRUD proveedores
-- [ ] Flujo completo nueva compra
-- [ ] Generación de imagen PNG del estado de cuenta
-- [ ] PWA: manifest + service worker
+- [x] CRUD proveedores — lista con búsqueda, nuevo, detalle con historial, editar (`/proveedores`, `/proveedores/nuevo`, `/proveedores/[id]`, `/proveedores/[id]/editar`)
+- [x] Flujo completo nueva compra — combobox proveedor/producto, autocomplete precio, pago inicial, campo comisión cueva (`/compras/nueva`, `/compras/[id]`)
+- [x] Generación de imagen PNG del estado de cuenta — `html-to-image`, botón en detalle de cliente, tabla con pendientes + totales
+- [x] PWA: manifest + service worker — íconos 192/512, shortcuts, meta tags iOS, SW cache-first para shell
 
 ### Fase 3 — Polish MVP (2–3 días)
 - [ ] Buscadores en listas
