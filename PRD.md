@@ -385,12 +385,14 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 ## 10. Plan de desarrollo — fases
 
 ### Fase 0 — Setup (1–2 días)
-- [ ] Repositorio Git, estructura de carpetas
-- [ ] Next.js + Tailwind + Prisma configurados
-- [ ] Base de datos PostgreSQL en Railway
-- [ ] Migraciones iniciales (todas las tablas)
-- [ ] Auth funcional (login / logout / JWT)
-- [ ] Middleware de tenant en todas las rutas API
+- [x] Repositorio Git, estructura de carpetas
+- [x] Next.js 14.2.35 + Tailwind + Prisma configurados
+- [x] Base de datos PostgreSQL en Railway — ya provisionada. `.env` tiene la URL interna (`postgres.railway.internal`). Para dev local, reemplazarla con la URL pública (Railway dashboard → tu DB → Connect → Public URL).
+- [x] Schema completo en `prisma/schema.prisma` (todas las tablas del §5.2) — pendiente correr `npm run db:migrate` con URL pública para generar la migración inicial
+- [x] Auth funcional (login / logout / JWT 7 días) — NextAuth credentials + bcrypt, `NEXTAUTH_SECRET` requerido
+- [x] Middleware de tenant en todas las rutas API (`lib/api.ts` → `withTenant()`, `middleware.ts` protege rutas)
+
+> **Nota de seguridad:** Next.js 14.x tiene CVEs conocidos (DoS en Image Optimizer, cache poisoning). Para producción, evaluar upgrade a Next.js 15/16 antes del deploy.
 
 ### Fase 1 — Core (1–2 semanas)
 - [ ] CRUD clientes
