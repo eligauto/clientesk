@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmt } from "@/lib/utils";
@@ -145,14 +145,36 @@ function ProductForm({
 
 export function ProductosClient({
   initialProducts,
+  page,
+  totalPages,
+  total,
+  query,
 }: {
   initialProducts: Product[];
+  page: number;
+  totalPages: number;
+  total: number;
+  query: string;
 }) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [search, setSearch] = useState(query);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (search === query) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("q", search.trim());
+      router.push(`/productos?${params.toString()}`);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function handleCreate(data: Omit<Product, "id">) {
     setSaving(true);
@@ -192,10 +214,24 @@ export function ProductosClient({
     router.refresh();
   }
 
+  function pageHref(p: number) {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("q", search.trim());
+    params.set("page", String(p));
+    return `/productos?${params.toString()}`;
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-semibold text-gray-900">Productos</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-semibold text-gray-900">
+          Productos
+          {total > 0 && (
+            <span className="ml-2 text-sm font-normal text-gray-400">
+              ({total.toLocaleString("es-AR")})
+            </span>
+          )}
+        </h1>
         {!showNew && (
           <div className="flex gap-2">
             <Link
@@ -214,6 +250,17 @@ export function ProductosClient({
         )}
       </div>
 
+      {/* Búsqueda */}
+      <div className="mb-4">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre, código o marca..."
+          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+        />
+      </div>
+
       {showNew && (
         <div className="mb-4">
           <ProductForm
@@ -228,7 +275,7 @@ export function ProductosClient({
 
       {initialProducts.length === 0 && !showNew ? (
         <p className="text-sm text-gray-400 text-center py-12">
-          Todavía no hay productos
+          {query ? "Sin resultados para esa búsqueda" : "Todavía no hay productos"}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -278,6 +325,37 @@ export function ProductosClient({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-gray-100">
+          <Link
+            href={pageHref(page - 1)}
+            aria-disabled={page <= 1}
+            className={`text-sm px-4 py-2 rounded-lg border ${
+              page <= 1
+                ? "border-gray-100 text-gray-300 pointer-events-none"
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            ← Anterior
+          </Link>
+          <span className="text-xs text-gray-500">
+            {page} / {totalPages}
+          </span>
+          <Link
+            href={pageHref(page + 1)}
+            aria-disabled={page >= totalPages}
+            className={`text-sm px-4 py-2 rounded-lg border ${
+              page >= totalPages
+                ? "border-gray-100 text-gray-300 pointer-events-none"
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Siguiente →
+          </Link>
+        </div>
       )}
     </div>
   );
