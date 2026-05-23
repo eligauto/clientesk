@@ -102,7 +102,7 @@ export default async function ClienteDetallePage({
           customerName={customer.name}
           transactions={transactions.map((t) => ({
             id: t.id,
-            date: t.date,
+            date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
             product: t.product,
             quantity: Number(t.quantity),
             unitPrice: Number(t.unitPrice),
