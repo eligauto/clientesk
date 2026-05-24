@@ -21,28 +21,34 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
   const headerIdx = raw.findIndex(
     (row) =>
       row.some((c) => String(c).trim().toUpperCase() === "CODIGO") &&
-      row.some((c) => String(c).trim().toUpperCase() === "DESCRIPCION")
+      row.some((c) => String(c).trim().toUpperCase() === "DESCRIPCION"),
   );
   if (headerIdx === -1) {
-    return { rows: [], errors: ["No se encontró la fila de encabezados (CODIGO, DESCRIPCION)"] };
+    return {
+      rows: [],
+      errors: ["No se encontró la fila de encabezados (CODIGO, DESCRIPCION)"],
+    };
   }
 
-  const header    = raw[headerIdx].map((c) => String(c).trim().toUpperCase());
+  const header = raw[headerIdx].map((c) => String(c).trim().toUpperCase());
   const codigoIdx = header.indexOf("CODIGO");
-  const descIdx   = header.indexOf("DESCRIPCION");
-  const marcaIdx  = header.indexOf("MARCA");
+  const descIdx = header.indexOf("DESCRIPCION");
+  const marcaIdx = header.indexOf("MARCA");
   const precioIdx = header.indexOf("PRECIO");
 
   if (codigoIdx === -1 || descIdx === -1) {
-    return { rows: [], errors: ["El archivo no tiene las columnas CODIGO y DESCRIPCION"] };
+    return {
+      rows: [],
+      errors: ["El archivo no tiene las columnas CODIGO y DESCRIPCION"],
+    };
   }
 
   const rows: Row[] = [];
   const errors: string[] = [];
 
   for (let i = headerIdx + 1; i < raw.length; i++) {
-    const r    = raw[i];
-    const sku  = String(r[codigoIdx] ?? "").trim();
+    const r = raw[i];
+    const sku = String(r[codigoIdx] ?? "").trim();
     const name = String(r[descIdx] ?? "").trim();
     if (!sku && !name) continue;
     if (!name) {
@@ -54,7 +60,10 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
     if (precioIdx !== -1) {
       const rp = r[precioIdx];
       if (rp !== "" && rp != null) {
-        const n = typeof rp === "number" ? rp : parseFloat(String(rp).replace(",", "."));
+        const n =
+          typeof rp === "number"
+            ? rp
+            : parseFloat(String(rp).replace(",", "."));
         if (!isNaN(n) && n > 0) costPrice = n;
       }
     }
@@ -62,12 +71,64 @@ function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
     rows.push({
       sku: sku || null,
       name,
-      notes: marcaIdx !== -1 ? (String(r[marcaIdx] ?? "").trim() || null) : null,
+      notes: marcaIdx !== -1 ? String(r[marcaIdx] ?? "").trim() || null : null,
       costPrice,
     });
   }
 
   return { rows, errors };
+}
+
+async function importRows(rows: Row[], tenantId: string) {
+  const withSku = rows.filter((r) => r.sku);
+  const withoutSku = rows.filter((r) => !r.sku);
+  let processed = 0;
+
+  for (let i = 0; i < withSku.length; i += BATCH_SIZE) {
+    const batch = withSku.slice(i, i + BATCH_SIZE);
+    await prisma.$transaction(
+      batch.map((r) => {
+        const prices = calcPrices(r.costPrice);
+        return prisma.product.upsert({
+          where: { tenantId_sku: { tenantId, sku: r.sku! } },
+          create: {
+            tenantId,
+            sku: r.sku,
+            name: r.name,
+            notes: r.notes,
+            costPrice: r.costPrice,
+            ...prices,
+          },
+          update: {
+            name: r.name,
+            notes: r.notes,
+            costPrice: r.costPrice,
+            ...prices,
+          },
+        });
+      }),
+    );
+    processed += batch.length;
+  }
+
+  if (withoutSku.length > 0) {
+    const result = await prisma.product.createMany({
+      data: withoutSku.map((r) => {
+        const prices = calcPrices(r.costPrice);
+        return {
+          tenantId,
+          name: r.name,
+          notes: r.notes,
+          costPrice: r.costPrice,
+          ...prices,
+        };
+      }),
+      skipDuplicates: true,
+    });
+    processed += result.count;
+  }
+
+  return NextResponse.json({ processed });
 }
 
 export async function POST(req: NextRequest) {
@@ -76,14 +137,26 @@ export async function POST(req: NextRequest) {
 
   const preview = req.nextUrl.searchParams.get("preview") === "1";
 
+  if (req.headers.get("content-type")?.includes("application/json")) {
+    const { rows } = (await req.json()) as { rows: Row[] };
+    return importRows(rows, auth.tenantId);
+  }
+
   let buffer: Buffer;
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "No se recibió archivo" }, { status: 400 });
+    if (!file)
+      return NextResponse.json(
+        { error: "No se recibió archivo" },
+        { status: 400 },
+      );
     buffer = Buffer.from(await file.arrayBuffer());
   } catch {
-    return NextResponse.json({ error: "Error al leer el archivo" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Error al leer el archivo" },
+      { status: 400 },
+    );
   }
 
   const { rows, errors } = parseSheet(buffer);
@@ -103,41 +176,9 @@ export async function POST(req: NextRequest) {
         ...calcPrices(r.costPrice),
       })),
       warnings: errors.slice(0, 5),
+      allRows: rows,
     });
   }
 
-  // Products with sku: upsert in batches (updates prices on reimport)
-  // Products without sku: createMany + skipDuplicates
-  const withSku    = rows.filter((r) => r.sku);
-  const withoutSku = rows.filter((r) => !r.sku);
-
-  let processed = 0;
-
-  for (let i = 0; i < withSku.length; i += BATCH_SIZE) {
-    const batch = withSku.slice(i, i + BATCH_SIZE);
-    await prisma.$transaction(
-      batch.map((r) => {
-        const prices = calcPrices(r.costPrice);
-        return prisma.product.upsert({
-          where: { tenantId_sku: { tenantId: auth.tenantId, sku: r.sku! } },
-          create: { tenantId: auth.tenantId, sku: r.sku, name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices },
-          update: { name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices },
-        });
-      })
-    );
-    processed += batch.length;
-  }
-
-  if (withoutSku.length > 0) {
-    const result = await prisma.product.createMany({
-      data: withoutSku.map((r) => {
-        const prices = calcPrices(r.costPrice);
-        return { tenantId: auth.tenantId, name: r.name, notes: r.notes, costPrice: r.costPrice, ...prices };
-      }),
-      skipDuplicates: true,
-    });
-    processed += result.count;
-  }
-
-  return NextResponse.json({ total: rows.length, processed });
+  return importRows(rows, auth.tenantId);
 }

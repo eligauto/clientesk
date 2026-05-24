@@ -5,18 +5,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fmt } from "@/lib/utils";
 
-type PreviewRow = {
+const CHUNK_SIZE = 500;
+
+type Row = {
   sku: string | null;
   name: string;
   notes: string | null;
   costPrice: number | null;
-  priceList: number | null;
 };
+
+type PreviewRow = Row & { priceList: number | null };
 
 type PreviewResult = {
   total: number;
   sample: PreviewRow[];
   warnings: string[];
+  allRows: Row[];
 };
 
 type ImportResult = {
@@ -32,6 +36,7 @@ export default function ImportarProductosPage() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState("");
 
   async function handlePreview() {
@@ -55,22 +60,37 @@ export default function ImportarProductosPage() {
   }
 
   async function handleImport() {
-    if (!file) return;
+    if (!preview) return;
+    const { allRows } = preview;
     setLoading(true);
     setError("");
+    setProgress({ done: 0, total: allRows.length });
 
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/productos/importar", { method: "POST", body: fd });
-    const data = await res.json();
+    let totalProcessed = 0;
 
-    if (!res.ok) {
-      setError(data.error ?? "Error al importar");
-      setLoading(false);
-      return;
+    for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
+      const chunk = allRows.slice(i, i + CHUNK_SIZE);
+      const res = await fetch("/api/productos/importar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: chunk }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "Error al importar");
+        setLoading(false);
+        setProgress(null);
+        return;
+      }
+
+      totalProcessed += data.processed;
+      setProgress({ done: Math.min(i + CHUNK_SIZE, allRows.length), total: allRows.length });
     }
-    setResult(data);
+
+    setResult({ total: allRows.length, processed: totalProcessed });
     setLoading(false);
+    setProgress(null);
   }
 
   function reset() {
@@ -78,6 +98,7 @@ export default function ImportarProductosPage() {
     setPreview(null);
     setResult(null);
     setError("");
+    setProgress(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -140,7 +161,7 @@ export default function ImportarProductosPage() {
                 {preview.total.toLocaleString("es-AR")} productos encontrados
               </p>
               <p className="text-xs text-indigo-600 mt-0.5">
-                Los ya existentes (mismo código) serán omitidos, no sobreescritos.
+                Los ya existentes (mismo código) serán actualizados con los nuevos precios.
               </p>
             </div>
           </div>
@@ -190,6 +211,22 @@ export default function ImportarProductosPage() {
             </div>
           </div>
 
+          {/* Progress bar */}
+          {progress && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Importando...</span>
+                <span>{progress.done.toLocaleString("es-AR")} / {progress.total.toLocaleString("es-AR")}</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {error && <p className="text-xs text-red-600">{error}</p>}
 
           <div className="flex gap-3">
@@ -200,7 +237,7 @@ export default function ImportarProductosPage() {
             >
               {loading ? "Importando..." : `Importar ${preview.total.toLocaleString("es-AR")} productos`}
             </button>
-            <button onClick={reset} className="px-4 py-3 text-sm text-gray-500 hover:text-gray-800">
+            <button onClick={reset} disabled={loading} className="px-4 py-3 text-sm text-gray-500 hover:text-gray-800 disabled:opacity-40">
               Cancelar
             </button>
           </div>
