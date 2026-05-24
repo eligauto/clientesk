@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import { Prisma } from "@prisma/client";
 import { getAuth, UNAUTHORIZED } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { calcPrices } from "@/lib/price-multipliers";
-
-const BATCH_SIZE = 200;
 
 type Row = {
   sku: string | null;
@@ -13,115 +11,43 @@ type Row = {
   costPrice: number | null;
 };
 
-function parseSheet(buffer: Buffer): { rows: Row[]; errors: string[] } {
-  const wb = XLSX.read(buffer, { type: "buffer" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: "" });
+export async function POST(req: NextRequest) {
+  const auth = await getAuth();
+  if (!auth) return UNAUTHORIZED;
 
-  const headerIdx = raw.findIndex(
-    (row) =>
-      row.some((c) => String(c).trim().toUpperCase() === "CODIGO") &&
-      row.some((c) => String(c).trim().toUpperCase() === "DESCRIPCION"),
-  );
-  if (headerIdx === -1) {
-    return {
-      rows: [],
-      errors: ["No se encontró la fila de encabezados (CODIGO, DESCRIPCION)"],
-    };
-  }
+  const { rows } = (await req.json()) as { rows: Row[] };
 
-  const header = raw[headerIdx].map((c) => String(c).trim().toUpperCase());
-  const codigoIdx = header.indexOf("CODIGO");
-  const descIdx = header.indexOf("DESCRIPCION");
-  const marcaIdx = header.indexOf("MARCA");
-  const precioIdx = header.indexOf("PRECIO");
-
-  if (codigoIdx === -1 || descIdx === -1) {
-    return {
-      rows: [],
-      errors: ["El archivo no tiene las columnas CODIGO y DESCRIPCION"],
-    };
-  }
-
-  const rows: Row[] = [];
-  const errors: string[] = [];
-
-  for (let i = headerIdx + 1; i < raw.length; i++) {
-    const r = raw[i];
-    const sku = String(r[codigoIdx] ?? "").trim();
-    const name = String(r[descIdx] ?? "").trim();
-    if (!sku && !name) continue;
-    if (!name) {
-      errors.push(`Fila ${i + 1}: descripción vacía (sku=${sku}), omitida`);
-      continue;
-    }
-
-    let costPrice: number | null = null;
-    if (precioIdx !== -1) {
-      const rp = r[precioIdx];
-      if (rp !== "" && rp != null) {
-        const n =
-          typeof rp === "number"
-            ? rp
-            : parseFloat(String(rp).replace(",", "."));
-        if (!isNaN(n) && n > 0) costPrice = n;
-      }
-    }
-
-    rows.push({
-      sku: sku || null,
-      name,
-      notes: marcaIdx !== -1 ? String(r[marcaIdx] ?? "").trim() || null : null,
-      costPrice,
-    });
-  }
-
-  return { rows, errors };
-}
-
-async function importRows(rows: Row[], tenantId: string) {
-  const withSku = rows.filter((r) => r.sku);
+  const withSku    = rows.filter((r) => r.sku);
   const withoutSku = rows.filter((r) => !r.sku);
   let processed = 0;
 
-  for (let i = 0; i < withSku.length; i += BATCH_SIZE) {
-    const batch = withSku.slice(i, i + BATCH_SIZE);
-    await prisma.$transaction(
-      batch.map((r) => {
-        const prices = calcPrices(r.costPrice);
-        return prisma.product.upsert({
-          where: { tenantId_sku: { tenantId, sku: r.sku! } },
-          create: {
-            tenantId,
-            sku: r.sku,
-            name: r.name,
-            notes: r.notes,
-            costPrice: r.costPrice,
-            ...prices,
-          },
-          update: {
-            name: r.name,
-            notes: r.notes,
-            costPrice: r.costPrice,
-            ...prices,
-          },
-        });
-      }),
-    );
-    processed += batch.length;
+  // Un solo INSERT … ON CONFLICT por chunk — un único round-trip a la DB
+  if (withSku.length > 0) {
+    const inserts = withSku.map((r) => {
+      const p = calcPrices(r.costPrice);
+      return Prisma.sql`(${crypto.randomUUID()}, ${auth.tenantId}, ${r.sku}, ${r.name}, ${r.notes}, ${r.costPrice}, ${p.priceList}, ${p.priceCredit}, ${p.priceTransfer}, ${p.priceCash})`;
+    });
+
+    await prisma.$executeRaw`
+      INSERT INTO products (id, tenant_id, sku, name, notes, cost_price, price_list, price_credit, price_transfer, price_cash)
+      VALUES ${Prisma.join(inserts, ",")}
+      ON CONFLICT (tenant_id, sku) DO UPDATE SET
+        name           = EXCLUDED.name,
+        notes          = EXCLUDED.notes,
+        cost_price     = EXCLUDED.cost_price,
+        price_list     = EXCLUDED.price_list,
+        price_credit   = EXCLUDED.price_credit,
+        price_transfer = EXCLUDED.price_transfer,
+        price_cash     = EXCLUDED.price_cash
+    `;
+    processed += withSku.length;
   }
 
   if (withoutSku.length > 0) {
     const result = await prisma.product.createMany({
       data: withoutSku.map((r) => {
-        const prices = calcPrices(r.costPrice);
-        return {
-          tenantId,
-          name: r.name,
-          notes: r.notes,
-          costPrice: r.costPrice,
-          ...prices,
-        };
+        const p = calcPrices(r.costPrice);
+        return { tenantId: auth.tenantId, name: r.name, notes: r.notes, costPrice: r.costPrice, ...p };
       }),
       skipDuplicates: true,
     });
@@ -129,56 +55,4 @@ async function importRows(rows: Row[], tenantId: string) {
   }
 
   return NextResponse.json({ processed });
-}
-
-export async function POST(req: NextRequest) {
-  const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
-
-  const preview = req.nextUrl.searchParams.get("preview") === "1";
-
-  if (req.headers.get("content-type")?.includes("application/json")) {
-    const { rows } = (await req.json()) as { rows: Row[] };
-    return importRows(rows, auth.tenantId);
-  }
-
-  let buffer: Buffer;
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file)
-      return NextResponse.json(
-        { error: "No se recibió archivo" },
-        { status: 400 },
-      );
-    buffer = Buffer.from(await file.arrayBuffer());
-  } catch {
-    return NextResponse.json(
-      { error: "Error al leer el archivo" },
-      { status: 400 },
-    );
-  }
-
-  const { rows, errors } = parseSheet(buffer);
-
-  if (errors.length > 0 && rows.length === 0) {
-    return NextResponse.json({ error: errors[0] }, { status: 422 });
-  }
-
-  if (preview) {
-    return NextResponse.json({
-      total: rows.length,
-      sample: rows.slice(0, 5).map((r) => ({
-        sku: r.sku,
-        name: r.name,
-        notes: r.notes,
-        costPrice: r.costPrice,
-        ...calcPrices(r.costPrice),
-      })),
-      warnings: errors.slice(0, 5),
-      allRows: rows,
-    });
-  }
-
-  return importRows(rows, auth.tenantId);
 }

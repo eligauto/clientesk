@@ -37,7 +37,6 @@ model Organization {
   payments         Payment[]
   purchases        Purchase[]
   purchasePayments PurchasePayment[]
-
   @@map("organizations")
 }
 
@@ -192,3 +191,4 @@ model PurchasePayment {
 
   @@map("purchase_payments")
 }
+
