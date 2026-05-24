@@ -17,7 +17,12 @@ export async function POST(req: NextRequest) {
 
   const { rows } = (await req.json()) as { rows: Row[] };
 
-  const withSku    = rows.filter((r) => r.sku);
+  // Deduplicar por sku: si el Excel tiene el mismo código dos veces, ganó el último
+  const skuMap = new Map<string, Row>();
+  for (const r of rows) {
+    if (r.sku) skuMap.set(r.sku, r);
+  }
+  const withSku    = Array.from(skuMap.values());
   const withoutSku = rows.filter((r) => !r.sku);
   let processed = 0;
 
