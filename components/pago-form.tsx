@@ -30,7 +30,12 @@ export function PagoForm({ transactionId, maxAmount }: Props) {
     const res = await fetch("/api/pagos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transactionId, amount: amt, method, notes: notes || undefined }),
+      body: JSON.stringify({
+        transactionId,
+        amount: amt,
+        method,
+        notes: notes || undefined,
+      }),
     });
 
     if (!res.ok) {
@@ -46,13 +51,18 @@ export function PagoForm({ transactionId, maxAmount }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-100 p-4 space-y-3">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white rounded-xl border border-gray-100 p-4 space-y-3"
+    >
       <h3 className="text-sm font-medium text-gray-900">Registrar pago</h3>
       <p className="text-xs text-gray-400">Saldo pendiente: {fmt(maxAmount)}</p>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Monto
+          </label>
           <input
             type="number"
             value={amount}
@@ -62,15 +72,17 @@ export function PagoForm({ transactionId, maxAmount }: Props) {
             max={maxAmount}
             step="any"
             required
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Método</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Método
+          </label>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="efectivo">Efectivo</option>
             <option value="transferencia">Transferencia</option>

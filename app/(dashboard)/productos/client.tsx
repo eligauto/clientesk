@@ -18,15 +18,30 @@ type Product = {
   notes: string | null;
 };
 
-const MULT = { priceList: 1.8, priceCredit: 2.07, priceTransfer: 1.7, priceCash: 1.62 };
-function round2(n: number) { return Math.round(n * 100) / 100; }
-function calcFromCost(cost: number | null): Pick<Product, "priceList" | "priceCredit" | "priceTransfer" | "priceCash"> {
-  if (!cost || cost <= 0) return { priceList: null, priceCredit: null, priceTransfer: null, priceCash: null };
+const MULT = {
+  priceList: 1.8,
+  priceCredit: 2.07,
+  priceTransfer: 1.7,
+  priceCash: 1.62,
+};
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+function calcFromCost(
+  cost: number | null,
+): Pick<Product, "priceList" | "priceCredit" | "priceTransfer" | "priceCash"> {
+  if (!cost || cost <= 0)
+    return {
+      priceList: null,
+      priceCredit: null,
+      priceTransfer: null,
+      priceCash: null,
+    };
   return {
-    priceList:     round2(cost * MULT.priceList),
-    priceCredit:   round2(cost * MULT.priceCredit),
+    priceList: round2(cost * MULT.priceList),
+    priceCredit: round2(cost * MULT.priceCredit),
     priceTransfer: round2(cost * MULT.priceTransfer),
-    priceCash:     round2(cost * MULT.priceCash),
+    priceCash: round2(cost * MULT.priceCash),
   };
 }
 
@@ -43,7 +58,7 @@ const emptyForm = (): Omit<Product, "id"> => ({
 });
 
 const inputClass =
-  "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 function ProductForm({
   initial,
@@ -74,19 +89,20 @@ function ProductForm({
     key: "priceList" | "priceCredit" | "priceTransfer" | "priceCash",
     mult: number,
   ) {
-    const isCalc = form.costPrice != null && form[key] === round2(form.costPrice * mult);
+    const isCalc =
+      form.costPrice != null && form[key] === round2(form.costPrice * mult);
     return (
       <div>
         <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
           {label}
-          {isCalc && (
-            <span className="text-indigo-400 font-mono">×{mult}</span>
-          )}
+          {isCalc && <span className="text-indigo-400 font-mono">×{mult}</span>}
         </label>
         <input
           type="number"
           value={(form[key] as number | null) ?? ""}
-          onChange={(e) => set(key, e.target.value ? Number(e.target.value) : null)}
+          onChange={(e) =>
+            set(key, e.target.value ? Number(e.target.value) : null)
+          }
           min="0"
           step="any"
           placeholder="—"
@@ -114,7 +130,9 @@ function ProductForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Código</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Código
+          </label>
           <input
             type="text"
             value={form.sku ?? ""}
@@ -124,7 +142,9 @@ function ProductForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Marca</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Marca
+          </label>
           <input
             type="text"
             value={form.notes ?? ""}
@@ -134,7 +154,9 @@ function ProductForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Unidad</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Unidad
+          </label>
           <input
             type="text"
             value={form.unit ?? ""}
@@ -162,14 +184,15 @@ function ProductForm({
 
         <div className="col-span-2">
           <p className="text-xs text-gray-400 -mt-1">
-            Al ingresar el costo se calculan los precios automáticamente. Podés editarlos.
+            Al ingresar el costo se calculan los precios automáticamente. Podés
+            editarlos.
           </p>
         </div>
 
-        {priceInput("Lista",       "priceList",     MULT.priceList)}
-        {priceInput("Crédito",     "priceCredit",   MULT.priceCredit)}
-        {priceInput("Transf.",     "priceTransfer", MULT.priceTransfer)}
-        {priceInput("Contado",     "priceCash",     MULT.priceCash)}
+        {priceInput("Lista", "priceList", MULT.priceList)}
+        {priceInput("Crédito", "priceCredit", MULT.priceCredit)}
+        {priceInput("Transf.", "priceTransfer", MULT.priceTransfer)}
+        {priceInput("Contado", "priceCash", MULT.priceCash)}
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
@@ -224,8 +247,10 @@ export function ProductosClient({
       if (search.trim()) params.set("q", search.trim());
       router.push(`/productos?${params.toString()}`);
     }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   async function handleCreate(data: Omit<Product, "id">) {
@@ -275,8 +300,8 @@ export function ProductosClient({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h1 className="text-lg font-semibold text-gray-900 min-w-0">
           Productos
           {total > 0 && (
             <span className="ml-2 text-sm font-normal text-gray-400">
@@ -285,7 +310,7 @@ export function ProductosClient({
           )}
         </h1>
         {!showNew && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Link
               href="/productos/importar"
               className="text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
@@ -293,7 +318,10 @@ export function ProductosClient({
               Importar
             </Link>
             <button
-              onClick={() => { setShowNew(true); setEditingId(null); }}
+              onClick={() => {
+                setShowNew(true);
+                setEditingId(null);
+              }}
               className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg"
             >
               + Nuevo
@@ -318,7 +346,10 @@ export function ProductosClient({
           <ProductForm
             initial={emptyForm()}
             onSave={handleCreate}
-            onCancel={() => { setShowNew(false); setSaveError(""); }}
+            onCancel={() => {
+              setShowNew(false);
+              setSaveError("");
+            }}
             loading={saving}
             error={saveError}
           />
@@ -327,7 +358,9 @@ export function ProductosClient({
 
       {initialProducts.length === 0 && !showNew ? (
         <p className="text-sm text-gray-400 text-center py-12">
-          {query ? "Sin resultados para esa búsqueda" : "Todavía no hay productos"}
+          {query
+            ? "Sin resultados para esa búsqueda"
+            : "Todavía no hay productos"}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -335,9 +368,22 @@ export function ProductosClient({
             <li key={p.id}>
               {editingId === p.id ? (
                 <ProductForm
-                  initial={{ sku: p.sku, name: p.name, unit: p.unit, costPrice: p.costPrice, priceList: p.priceList, priceCredit: p.priceCredit, priceTransfer: p.priceTransfer, priceCash: p.priceCash, notes: p.notes }}
+                  initial={{
+                    sku: p.sku,
+                    name: p.name,
+                    unit: p.unit,
+                    costPrice: p.costPrice,
+                    priceList: p.priceList,
+                    priceCredit: p.priceCredit,
+                    priceTransfer: p.priceTransfer,
+                    priceCash: p.priceCash,
+                    notes: p.notes,
+                  }}
                   onSave={(data) => handleEdit(p.id, data)}
-                  onCancel={() => { setEditingId(null); setSaveError(""); }}
+                  onCancel={() => {
+                    setEditingId(null);
+                    setSaveError("");
+                  }}
                   loading={saving}
                   error={saveError}
                 />
@@ -345,32 +391,42 @@ export function ProductosClient({
                 <div className="bg-white rounded-xl p-4 border border-gray-100">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {p.name}
+                      </p>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {[p.sku, p.notes, p.unit].filter(Boolean).join(" · ")}
                       </p>
                     </div>
                     <button
-                      onClick={() => { setEditingId(p.id); setShowNew(false); setSaveError(""); }}
+                      onClick={() => {
+                        setEditingId(p.id);
+                        setShowNew(false);
+                        setSaveError("");
+                      }}
                       className="text-xs text-indigo-600 shrink-0"
                     >
                       Editar
                     </button>
                   </div>
-                  <div className="grid grid-cols-5 gap-1 mt-3">
+                  <div
+                    className={`grid gap-x-2 gap-y-1 mt-3 ${p.costPrice != null ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"}`}
+                  >
                     {p.costPrice != null && (
                       <div className="text-center">
                         <p className="text-xs text-gray-400">Costo</p>
-                        <p className="text-xs font-medium text-gray-500">{fmt(p.costPrice)}</p>
+                        <p className="text-xs font-medium text-gray-500">
+                          {fmt(p.costPrice)}
+                        </p>
                       </div>
                     )}
                     {[
-                      { label: "Lista",   val: p.priceList },
+                      { label: "Lista", val: p.priceList },
                       { label: "Crédito", val: p.priceCredit },
                       { label: "Transf.", val: p.priceTransfer },
                       { label: "Contado", val: p.priceCash },
                     ].map(({ label, val }) => (
-                      <div key={label} className={`text-center ${p.costPrice == null ? "col-span-1" : ""}`}>
+                      <div key={label} className="text-center">
                         <p className="text-xs text-gray-400">{label}</p>
                         <p className="text-xs font-medium text-gray-700">
                           {val !== null ? fmt(val) : "—"}

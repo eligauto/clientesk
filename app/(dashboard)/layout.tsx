@@ -14,9 +14,11 @@ export default async function DashboardLayout({
 
   return (
     <Providers session={session}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-dvh bg-gray-50">
         <Nav />
-        <main className="max-w-2xl mx-auto px-4 py-6">{children}</main>
+        <main className="max-w-2xl mx-auto px-4 py-6 pb-20 md:pb-6">
+          {children}
+        </main>
       </div>
     </Providers>
   );

@@ -5,6 +5,7 @@ import { getTenantId } from "@/lib/tenant";
 import { SaldoBadge, StatusBadge } from "@/components/saldo-badge";
 import { EstadoCuentaBtn } from "@/components/estado-cuenta-btn";
 import { fmt, fmtDate } from "@/lib/utils";
+import { DeleteClienteButton } from "./delete-cliente";
 
 export default async function ClienteDetallePage({
   params,
@@ -158,6 +159,16 @@ export default async function ClienteDetallePage({
           ))}
         </ul>
       )}
+
+      {/* Danger zone */}
+      <div className="mt-8 pt-6 border-t border-gray-100">
+        <DeleteClienteButton
+          clienteId={customer.id}
+          clienteName={customer.name}
+          transactionCount={transactions.length}
+          balanceDue={saldo}
+        />
+      </div>
     </div>
   );
 }
