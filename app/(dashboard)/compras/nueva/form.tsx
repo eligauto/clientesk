@@ -133,6 +133,7 @@ export function NuevaCompraForm({
     }
 
     router.push(`/proveedores/${proveedorId}`);
+    router.refresh();
   }
 
   return (

@@ -47,6 +47,7 @@ export default function EditarProveedorPage({
     }
 
     router.push(`/proveedores/${params.id}`);
+    router.refresh();
   }
 
   const inputClass =

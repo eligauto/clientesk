@@ -49,6 +49,7 @@ export default function EditarClientePage({
     }
 
     router.push(`/clientes/${params.id}`);
+    router.refresh();
   }
 
   const inputClass =

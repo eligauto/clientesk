@@ -136,6 +136,7 @@ export function NuevaVentaForm({
     }
 
     router.push(`/clientes/${clienteId}`);
+    router.refresh();
   }
 
   return (

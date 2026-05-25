@@ -35,6 +35,7 @@ export function DeleteClienteButton({
 
     if (res.ok) {
       router.push("/clientes");
+      router.refresh();
     } else {
       setLoading(false);
       alert("No se pudo eliminar el cliente. Intentá de nuevo.");

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { withTenant, NOT_FOUND } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { PaymentMethod } from "@prisma/client";
@@ -65,6 +66,10 @@ export const POST = withTenant(async (req, tenantId) => {
 
     return pago;
   });
+
+  revalidatePath(`/compras/${purchaseId}`);
+  revalidatePath(`/proveedores/${purchase.supplierId}`);
+  revalidatePath("/proveedores");
 
   return NextResponse.json(
     { ...payment, amount: Number(payment.amount) },
