@@ -1,35 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Combobox } from "@/components/combobox";
 import { fmt } from "@/lib/utils";
 
 type Customer = { id: string; name: string };
-type Product = {
-  id: string;
-  name: string;
-  sku: string | null;
-  unit: string | null;
-  priceList: number | null;
-  priceCredit: number | null;
-  priceTransfer: number | null;
-  priceCash: number | null;
-};
 
 const PRICE_LABELS: Record<string, string> = {
   lista: "Lista",
   credito: "Crédito",
   transferencia: "Transferencia",
   contado: "Contado",
-};
-
-const PRICE_FIELDS: Record<string, keyof Product> = {
-  lista: "priceList",
-  credito: "priceCredit",
-  transferencia: "priceTransfer",
-  contado: "priceCash",
 };
 
 const inputClass =
@@ -46,8 +29,7 @@ export function NuevaVentaForm({
   const today = new Date().toISOString().split("T")[0];
 
   const [clienteId, setClienteId] = useState(defaultClienteId ?? "");
-  const [productoId, setProductoId] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productoName, setProductoName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [priceType, setPriceType] = useState("lista");
   const [unitPrice, setUnitPrice] = useState("");
@@ -58,45 +40,6 @@ export function NuevaVentaForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Busca productos contra la API (async)
-  async function searchProductos(q: string) {
-    if (q.length < 2) return [];
-    const res = await fetch(`/api/productos?q=${encodeURIComponent(q)}&page=1`);
-    if (!res.ok) return [];
-    const data: Product[] = await res.json();
-    return data.map((p) => ({
-      id: p.id,
-      label: p.name,
-      sub: p.sku ?? undefined,
-      // Guardamos los datos del producto para el autocomplete de precio
-      _product: p,
-    })) as any[];
-  }
-
-  function handleProductSelect(id: string) {
-    setProductoId(id);
-    // El Combobox async retiene el option seleccionado — necesitamos los datos del producto
-    // para el autocomplete. Los pedimos directamente a la API si no los tenemos.
-    if (!id) { setSelectedProduct(null); setUnitPrice(""); return; }
-    fetch(`/api/productos/${id}/precios`)
-      .then((r) => r.json())
-      .then((p: Product) => {
-        setSelectedProduct(p);
-        const field = PRICE_FIELDS[priceType];
-        const price = p[field] as number | null;
-        if (price != null) setUnitPrice(String(price));
-      })
-      .catch(() => {});
-  }
-
-  // Re-autocomplete precio cuando cambia el tipo de precio
-  useEffect(() => {
-    if (!selectedProduct) return;
-    const field = PRICE_FIELDS[priceType];
-    const price = selectedProduct[field] as number | null;
-    if (price != null) setUnitPrice(String(price));
-  }, [priceType, selectedProduct]);
-
   const qty = parseFloat(quantity) || 0;
   const price = parseFloat(unitPrice) || 0;
   const payment = parseFloat(initialPayment) || 0;
@@ -105,8 +48,8 @@ export function NuevaVentaForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!clienteId || !productoId) {
-      setError("Seleccioná un cliente y un producto");
+    if (!clienteId || !productoName.trim()) {
+      setError("Seleccioná un cliente e ingresá el producto");
       return;
     }
     setLoading(true);
@@ -117,7 +60,7 @@ export function NuevaVentaForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         customerId: clienteId,
-        productId: productoId,
+        productName: productoName.trim(),
         quantity: qty,
         priceType,
         unitPrice: price,
@@ -167,12 +110,13 @@ export function NuevaVentaForm({
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           Producto <span className="text-red-500">*</span>
         </label>
-        <Combobox
-          onSearch={searchProductos}
-          value={productoId}
-          onChange={handleProductSelect}
-          placeholder="Escribí nombre o código..."
+        <input
+          type="text"
+          value={productoName}
+          onChange={(e) => setProductoName(e.target.value)}
+          placeholder="Ej: Llave inglesa 12&quot;"
           required
+          className={inputClass}
         />
       </div>
 
@@ -315,7 +259,7 @@ export function NuevaVentaForm({
 
       <button
         type="submit"
-        disabled={loading || !clienteId || !productoId || !unitPrice || qty <= 0}
+        disabled={loading || !clienteId || !productoName.trim() || !unitPrice || qty <= 0}
         className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
       >
         {loading ? "Registrando..." : "Registrar venta"}

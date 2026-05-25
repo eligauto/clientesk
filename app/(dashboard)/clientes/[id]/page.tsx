@@ -19,7 +19,7 @@ export default async function ClienteDetallePage({
     prisma.transaction.findMany({
       where: { customerId: params.id, tenantId },
       include: {
-        product: { select: { name: true, unit: true } },
+        product: { select: { name: true, unit: true } } as any,
         _count: { select: { payments: true } },
       },
       orderBy: { date: "desc" },
@@ -104,7 +104,7 @@ export default async function ClienteDetallePage({
           transactions={transactions.map((t) => ({
             id: t.id,
             date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
-            product: t.product,
+            product: (t as any).product ?? { name: (t as any).productName ?? "Producto", unit: null },
             quantity: Number(t.quantity),
             unitPrice: Number(t.unitPrice),
             totalAmount: Number(t.totalAmount),
@@ -135,11 +135,11 @@ export default async function ClienteDetallePage({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {t.product.name}
+                      {(t as any).product?.name ?? (t as any).productName ?? "Producto"}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {fmtDate(t.date)} · {Number(t.quantity)}{" "}
-                      {t.product.unit ?? "u."}
+                      {(t as any).product?.unit ?? "u."}
                     </p>
                   </div>
                   <div className="text-right shrink-0">

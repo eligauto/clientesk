@@ -31,7 +31,7 @@ export default async function TransaccionDetallePage({
     where: { id: params.id, tenantId },
     include: {
       customer: { select: { id: true, name: true } },
-      product: { select: { name: true, unit: true } },
+      product: { select: { name: true, unit: true } } as any,
       payments: { orderBy: { paidAt: "asc" } },
     },
   });
@@ -55,11 +55,11 @@ export default async function TransaccionDetallePage({
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">
-              {transaction.product.name}
+              {(transaction as any).product?.name ?? (transaction as any).productName ?? "Producto"}
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">
               {fmtDate(transaction.date)} ·{" "}
-              {Number(transaction.quantity)} {transaction.product.unit ?? "u."} ·{" "}
+              {Number(transaction.quantity)} {(transaction as any).product?.unit ?? "u."} ·{" "}
               {PRICE_LABEL[transaction.priceType]}
             </p>
           </div>

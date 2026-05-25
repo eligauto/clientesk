@@ -7,6 +7,7 @@ export const POST = withTenant(async (req, tenantId) => {
   const {
     customerId,
     productId,
+    productName,
     quantity,
     priceType,
     unitPrice,
@@ -16,7 +17,8 @@ export const POST = withTenant(async (req, tenantId) => {
     date,
   } = await req.json();
 
-  if (!customerId || !productId || !quantity || !priceType || !unitPrice) {
+  const resolvedProductName = productName?.trim() || null;
+  if (!customerId || (!productId && !resolvedProductName) || !quantity || !priceType || !unitPrice) {
     return NextResponse.json(
       { error: "Campos requeridos faltantes", code: "VALIDATION_ERROR" },
       { status: 400 }
@@ -51,7 +53,8 @@ export const POST = withTenant(async (req, tenantId) => {
       data: {
         tenantId,
         customerId,
-        productId,
+        ...(productId ? { productId } : {}),
+        productName: resolvedProductName,
         quantity: qty,
         priceType: priceType as PriceType,
         unitPrice: price,
