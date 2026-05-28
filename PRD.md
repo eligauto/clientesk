@@ -1,6 +1,6 @@
 # PRD — SaaS de gestión de clientes y deudas
 
-**Versión:** 0.1 — MVP  
+**Versión:** 0.2  
 **Estado:** Borrador  
 **Última actualización:** Mayo 2026
 
@@ -30,13 +30,13 @@ Una PWA mobile-first que centraliza el registro de ventas, compras, pagos parcia
 
 ## 2. Objetivos del MVP
 
-| Objetivo | Métrica de éxito |
-|---|---|
-| Reemplazar el control en Excel/papel | 100% de transacciones registradas en la app |
-| Ver saldo actualizado por cliente | Saldo visible en < 2 taps desde home |
-| Registrar pagos parciales en campo (móvil) | Flujo de pago completo en < 60 segundos |
-| Generar estado de cuenta para WhatsApp | Imagen generada y descargable en 1 tap |
-| Base escalable multi-tenant | Agregar un segundo tenant sin cambios de código |
+| Objetivo                                   | Métrica de éxito                                |
+| ------------------------------------------ | ----------------------------------------------- |
+| Reemplazar el control en Excel/papel       | 100% de transacciones registradas en la app     |
+| Ver saldo actualizado por cliente          | Saldo visible en < 2 taps desde home            |
+| Registrar pagos parciales en campo (móvil) | Flujo de pago completo en < 60 segundos         |
+| Generar estado de cuenta para WhatsApp     | Imagen generada y descargable en 1 tap          |
+| Base escalable multi-tenant                | Agregar un segundo tenant sin cambios de código |
 
 ---
 
@@ -71,15 +71,15 @@ Una PWA mobile-first que centraliza el registro de ventas, compras, pagos parcia
 
 ### 4.1 Stack tecnológico
 
-| Capa | Tecnología | Justificación |
-|---|---|---|
-| Frontend | Next.js 14 (App Router) + Tailwind CSS | PWA nativa, SSR, excelente soporte móvil |
-| Backend | Next.js API Routes (o Node.js separado si escala) | Monorepo simple para MVP |
-| Base de datos | PostgreSQL (Railway) | Multi-tenant via `tenant_id`, tipos numéricos precisos |
-| ORM | Prisma | Type-safe, migraciones versionadas |
-| Auth | NextAuth.js (credentials) | JWT stateless, extensible a OAuth |
-| Deploy | Vercel (frontend) + Railway (DB) | Bajo costo en fase 0, escala fácil |
-| Generación de imagen | `html-to-image` o `canvas` en cliente | PNG del estado de cuenta sin dependencia de servidor |
+| Capa                 | Tecnología                                        | Justificación                                          |
+| -------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| Frontend             | Next.js 14 (App Router) + Tailwind CSS            | PWA nativa, SSR, excelente soporte móvil               |
+| Backend              | Next.js API Routes (o Node.js separado si escala) | Monorepo simple para MVP                               |
+| Base de datos        | PostgreSQL (Railway)                              | Multi-tenant via `tenant_id`, tipos numéricos precisos |
+| ORM                  | Prisma                                            | Type-safe, migraciones versionadas                     |
+| Auth                 | NextAuth.js (credentials)                         | JWT stateless, extensible a OAuth                      |
+| Deploy               | Vercel (frontend) + Railway (DB)                  | Bajo costo en fase 0, escala fácil                     |
+| Generación de imagen | `html-to-image` o `canvas` en cliente             | PNG del estado de cuenta sin dependencia de servidor   |
 
 ### 4.2 Modelo multi-tenant
 
@@ -121,16 +121,21 @@ Todas las tablas principales incluyen `tenant_id` (UUID). Las queries siempre fi
 ```
 organizations ──< users
      │
-     ├──< customers ──< transactions ──< payments
+     ├──< customers ──< transactions (ventas, referencia producto opcional)
+     │         └──────< account_payments (cobros libres sobre la cuenta)
      │
-     ├──< suppliers ──< purchases   ──< purchase_payments
+     ├──< suppliers ──< purchases (compras, referencia producto opcional)
+     │         └──────< supplier_payments (pagos libres sobre la cuenta)
      │
      └──< products ──< price_entries
 ```
 
+> **Cambio v0.2:** Los pagos ya no están ligados a una transacción/compra específica sino a la cuenta del cliente o proveedor. El saldo surge del total de ventas/compras menos el total de cobros/pagos acumulados. Esto refleja el modelo real del negocio: el cliente paga sobre su deuda total, no sobre ítems individuales.
+
 ### 5.2 Tablas principales
 
 #### `organizations`
+
 ```sql
 id          UUID PK
 name        TEXT NOT NULL
@@ -138,6 +143,7 @@ created_at  TIMESTAMP
 ```
 
 #### `users`
+
 ```sql
 id           UUID PK
 tenant_id    UUID FK → organizations.id
@@ -147,6 +153,7 @@ created_at   TIMESTAMP
 ```
 
 #### `customers`
+
 ```sql
 id              UUID PK
 tenant_id       UUID FK
@@ -159,6 +166,7 @@ created_at      TIMESTAMP
 ```
 
 #### `suppliers`
+
 ```sql
 id              UUID PK
 tenant_id       UUID FK
@@ -170,6 +178,7 @@ created_at      TIMESTAMP
 ```
 
 #### `products`
+
 ```sql
 id              UUID PK
 tenant_id       UUID FK
@@ -184,34 +193,40 @@ created_at      TIMESTAMP
 ```
 
 #### `transactions` (ventas a clientes)
+
 ```sql
 id            UUID PK
 tenant_id     UUID FK
 customer_id   UUID FK → customers.id
-product_id    UUID FK → products.id
+product_id    UUID FK → products.id    -- referencia informativa, no cambia el saldo
 quantity      NUMERIC(10,3)
 price_type    ENUM('lista', 'credito', 'transferencia', 'contado')
-unit_price    NUMERIC(12,2)              -- precio al momento de la venta
-total_amount  NUMERIC(12,2)             -- quantity * unit_price
-amount_paid   NUMERIC(12,2) DEFAULT 0
-balance_due   NUMERIC(12,2)             -- total_amount - amount_paid
+unit_price    NUMERIC(12,2)            -- precio al momento de la venta
+total_amount  NUMERIC(12,2)            -- quantity * unit_price
 date          DATE NOT NULL
 notes         TEXT
+status        ENUM('active', 'cancelled') DEFAULT 'active'  -- v0.2: anulación
 created_at    TIMESTAMP
 ```
 
-#### `payments` (pagos sobre ventas)
+> **Eliminado en v0.2:** `amount_paid` y `balance_due` por transacción. El saldo del cliente se calcula globalmente: `SUM(transactions.total_amount WHERE status='active') - SUM(account_payments.amount WHERE status='active')`.
+
+#### `account_payments` (cobros sobre la cuenta del cliente) — nuevo en v0.2
+
 ```sql
-id              UUID PK
-tenant_id       UUID FK
-transaction_id  UUID FK → transactions.id
-amount          NUMERIC(12,2)
-method          ENUM('efectivo', 'transferencia', 'cheque')
-paid_at         TIMESTAMP
-notes           TEXT
+id           UUID PK
+tenant_id    UUID FK
+customer_id  UUID FK → customers.id   -- pago asociado a la cuenta, no a una venta
+amount       NUMERIC(12,2)
+method       ENUM('efectivo', 'transferencia', 'cheque')
+date         DATE NOT NULL
+notes        TEXT                      -- descripción libre ("pago cuota", "abono julio", etc.)
+status       ENUM('active', 'cancelled') DEFAULT 'active'
+created_at   TIMESTAMP
 ```
 
 #### `purchases` (compras a proveedores)
+
 ```sql
 id            UUID PK
 tenant_id     UUID FK
@@ -221,30 +236,38 @@ quantity      NUMERIC(10,3)
 price_type    ENUM('lista', 'credito', 'transferencia', 'contado')
 unit_price    NUMERIC(12,2)
 total_amount  NUMERIC(12,2)
-amount_paid   NUMERIC(12,2) DEFAULT 0
-balance_due   NUMERIC(12,2)
-commission_pct NUMERIC(5,2) DEFAULT 0   -- ej: 2.00 para el 2% de cueva
+commission_pct NUMERIC(5,2) DEFAULT 0
 date          DATE NOT NULL
 notes         TEXT
+status        ENUM('active', 'cancelled') DEFAULT 'active'  -- v0.2: anulación
 created_at    TIMESTAMP
 ```
 
-#### `purchase_payments`
+> **Eliminado en v0.2:** `amount_paid` y `balance_due` por compra. Mismo modelo de libro diario que en clientes.
+
+#### `supplier_payments` (pagos sobre la cuenta del proveedor) — nuevo en v0.2
+
 ```sql
 id           UUID PK
 tenant_id    UUID FK
-purchase_id  UUID FK → purchases.id
+supplier_id  UUID FK → suppliers.id
 amount       NUMERIC(12,2)
 method       ENUM('efectivo', 'transferencia', 'cheque')
-paid_at      TIMESTAMP
+date         DATE NOT NULL
 notes        TEXT
+status       ENUM('active', 'cancelled') DEFAULT 'active'
+created_at   TIMESTAMP
 ```
 
 ### 5.3 Notas de consistencia
 
-- `balance_due` en `customers` y `suppliers` es un campo desnormalizado que se actualiza con un trigger o en la lógica de aplicación cada vez que se registra o modifica un pago. Permite queries rápidos sin JOINs costosos.
-- `unit_price` en `transactions` y `purchases` guarda el precio histórico al momento de la operación, independientemente de cambios futuros en `products`.
-- `commission_pct` en `purchases` permite registrar el costo de la "cueva" por transacción, de cara a ofrecerle el producto a ese proveedor en el futuro.
+- `balance_due` en `customers` y `suppliers` sigue siendo un campo desnormalizado pero ahora se calcula como:  
+  `balance_due = SUM(transactions.total_amount WHERE status='active') - SUM(account_payments.amount WHERE status='active')`  
+  Se recalcula en la lógica de aplicación al crear, editar o cancelar cualquier entrada. No existe más `balance_due` por transacción individual.
+- `unit_price` en `transactions` y `purchases` guarda el precio histórico al momento de la operación.
+- `commission_pct` en `purchases` permite registrar el costo de la "cueva".
+- Los registros nunca se borran físicamente (`DELETE`). La cancelación usa `status = 'cancelled'`. Esto preserva el historial auditable y permite revertir errores.
+- **Orden del estado de cuenta:** siempre `ORDER BY date ASC` — de la entrada más antigua a la más nueva, como un libro diario.
 
 ---
 
@@ -253,46 +276,74 @@ notes        TEXT
 ### 6.1 Módulo de clientes
 
 **Lista de clientes**
+
 - Listado con nombre, saldo pendiente total y último movimiento
 - Búsqueda por nombre
 - Ordenar por saldo (mayor deuda primero)
 - Indicador visual: saldo en verde (0), amarillo (>0), rojo (vencido o alto)
 
 **Detalle de cliente**
+
 - Datos de contacto (nombre, teléfono WhatsApp)
 - Resumen: total vendido, total cobrado, saldo pendiente
 - Historial de transacciones con estado (saldada / pendiente / parcial)
 - Botón "Ver estado de cuenta" → genera imagen para WhatsApp
 
-**Estado de cuenta (imagen PNG)**
+**Estado de cuenta (imagen PNG)** — actualizado en v0.2
 
 La imagen debe contener:
+
 - Logo / nombre del negocio (configurable por tenant)
 - Nombre del cliente
-- Tabla con columnas: Fecha · Producto · Cantidad · Precio · Pagado · Debe
+- Tabla de libro diario con columnas: **Fecha · Descripción · Debe · Haber · Saldo**
+  - Fila de tipo **venta**: Debe = `total_amount`, Haber = —, Descripción = producto + cantidad
+  - Fila de tipo **cobro**: Debe = —, Haber = `amount`, Descripción = notas del pago
+  - Filas ordenadas **de más antigua a más nueva** (`ORDER BY date ASC`)
 - Fila de totales
 - Saldo total destacado
 
-### 6.2 Módulo de transacciones (ventas)
+**Reglas de UI para la imagen:**
+
+- La columna Descripción tiene ancho fijo; el texto largo se trunca con `…` para no romper el layout
+- Las columnas numéricas (Debe / Haber / Saldo) tienen ancho mínimo garantizado para no solaparse con el texto
+
+### 6.2 Módulo de transacciones (ventas) — actualizado en v0.2
 
 **Nueva venta**
+
 1. Seleccionar cliente (buscador)
 2. Seleccionar producto (buscador)
 3. Ingresar cantidad
 4. Seleccionar tipo de precio → precio se autocompleta, editable
-5. Ingresar pago inicial (puede ser $0)
-6. Seleccionar método de pago del pago inicial
-7. Confirmar → crea `transaction` + `payment` si pago > 0, actualiza `balance_due` del cliente
+5. Confirmar → crea `transaction`, recalcula `customer.balance_due`
 
-**Registrar pago parcial**
-- Desde el detalle de una transacción pendiente
-- Ingresar monto + método
-- Sistema valida que monto ≤ saldo pendiente
-- Actualiza `transaction.balance_due` y `customer.balance_due`
+> **Eliminado en v0.2:** el pago inicial como parte del formulario de venta. Los pagos siempre se registran por separado desde el estado de cuenta del cliente.
 
-### 6.3 Módulo de proveedores
+**Registrar cobro (pago libre sobre la cuenta)** — v0.2
 
-Espejo simétrico del módulo de clientes, con las siguientes diferencias:
+- Desde el detalle / estado de cuenta del cliente
+- Ingresar: monto, método de pago, fecha, descripción libre (opcional)
+- El cobro **no está asociado a ninguna venta específica** — aplica contra el saldo total de la cuenta
+- Recalcula `customer.balance_due`
+
+**Editar / cancelar registros** — v0.2
+
+- Tanto ventas como cobros permiten:
+  - **Editar:** modificar monto, fecha, descripción u otros campos. El saldo se recalcula al guardar.
+  - **Cancelar:** marca el registro como `status = 'cancelled'`. Queda visible en el historial con indicador visual (tachado o badge "Anulado") pero no afecta el saldo.
+- No se permite eliminar registros físicamente (preservar auditoría).
+
+### 6.3 Módulo de proveedores — actualizado en v0.2
+
+Espejo simétrico del módulo de clientes. Aplican los mismos cambios de v0.2:
+
+- Pagos libres sobre la cuenta del proveedor (`supplier_payments`), no vinculados a una compra específica
+- Editar / cancelar compras y pagos con `status`
+- Estado de cuenta en orden cronológico ascendente
+- Las mismas reglas de UI para descripción truncada en imagen
+
+Diferencias propias del módulo de proveedores:
+
 - El saldo representa lo que **le debe mi cliente al proveedor** (no al revés)
 - Campo adicional `commission_pct` en `purchases` para registrar el costo de cueva
 
@@ -315,18 +366,18 @@ Espejo simétrico del módulo de clientes, con las siguientes diferencias:
 
 ### 7.2 Pantallas principales
 
-| Pantalla | Ruta |
-|---|---|
-| Login | `/login` |
-| Home / dashboard | `/` |
-| Lista de clientes | `/clientes` |
-| Detalle de cliente | `/clientes/[id]` |
-| Nueva venta | `/transacciones/nueva` |
-| Detalle de transacción | `/transacciones/[id]` |
-| Lista de proveedores | `/proveedores` |
-| Detalle de proveedor | `/proveedores/[id]` |
-| Nueva compra | `/compras/nueva` |
-| Productos | `/productos` |
+| Pantalla               | Ruta                   |
+| ---------------------- | ---------------------- |
+| Login                  | `/login`               |
+| Home / dashboard       | `/`                    |
+| Lista de clientes      | `/clientes`            |
+| Detalle de cliente     | `/clientes/[id]`       |
+| Nueva venta            | `/transacciones/nueva` |
+| Detalle de transacción | `/transacciones/[id]`  |
+| Lista de proveedores   | `/proveedores`         |
+| Detalle de proveedor   | `/proveedores/[id]`    |
+| Nueva compra           | `/compras/nueva`       |
+| Productos              | `/productos`           |
 
 ### 7.3 PWA
 
@@ -347,20 +398,29 @@ POST   /api/clientes
 GET    /api/clientes/:id
 PUT    /api/clientes/:id
 
-GET    /api/clientes/:id/transacciones
-POST   /api/transacciones
+GET    /api/clientes/:id/estado-cuenta         -- libro diario: ventas + cobros ordenados ASC por fecha
+POST   /api/transacciones                      -- nueva venta (sin pago inicial)
 GET    /api/transacciones/:id
-GET    /api/transacciones/:id/estado-cuenta   -- devuelve datos para generar imagen
+PUT    /api/transacciones/:id                  -- editar venta (v0.2)
+PATCH  /api/transacciones/:id/cancelar         -- cancelar venta (v0.2)
 
-POST   /api/pagos                              -- pago sobre una transacción
-DELETE /api/pagos/:id                          -- anular pago
+POST   /api/cobros                             -- nuevo cobro libre sobre cuenta de cliente (v0.2)
+GET    /api/cobros/:id
+PUT    /api/cobros/:id                         -- editar cobro (v0.2)
+PATCH  /api/cobros/:id/cancelar                -- cancelar cobro (v0.2)
 
 GET    /api/proveedores
 POST   /api/proveedores
 GET    /api/proveedores/:id
 
+GET    /api/proveedores/:id/estado-cuenta      -- libro diario proveedor (v0.2)
 POST   /api/compras
-POST   /api/pagos-compras
+PUT    /api/compras/:id                        -- editar compra (v0.2)
+PATCH  /api/compras/:id/cancelar               -- cancelar compra (v0.2)
+
+POST   /api/pagos-proveedor                    -- pago libre sobre cuenta de proveedor (v0.2)
+PUT    /api/pagos-proveedor/:id
+PATCH  /api/pagos-proveedor/:id/cancelar
 
 GET    /api/productos
 POST   /api/productos
@@ -368,6 +428,8 @@ PUT    /api/productos/:id
 ```
 
 Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con formato `{ error: string, code: string }`.
+
+> **Removido en v0.2:** `DELETE /api/pagos/:id` — los registros ya no se eliminan físicamente, solo se cancelan con `PATCH /:id/cancelar`.
 
 ---
 
@@ -385,6 +447,7 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 ## 10. Plan de desarrollo — fases
 
 ### Fase 0 — Setup (1–2 días)
+
 - [x] Repositorio Git, estructura de carpetas
 - [x] Next.js 14.2.35 + Tailwind + Prisma configurados
 - [x] Base de datos PostgreSQL en Railway — ya provisionada. `.env` tiene la URL interna (`postgres.railway.internal`). Para dev local, reemplazarla con la URL pública (Railway dashboard → tu DB → Connect → Public URL).
@@ -395,6 +458,7 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 > **Nota de seguridad:** Next.js 14.x tiene CVEs conocidos (DoS en Image Optimizer, cache poisoning). Para producción, evaluar upgrade a Next.js 15/16 antes del deploy.
 
 ### Fase 1 — Core (1–2 semanas)
+
 - [x] CRUD clientes — lista con búsqueda, nuevo, detalle, editar (`/clientes`, `/clientes/nuevo`, `/clientes/[id]`, `/clientes/[id]/editar`)
 - [x] CRUD productos — lista con inline create/edit (`/productos`)
 - [x] Flujo completo nueva venta — combobox cliente/producto, autocomplete de precio, pago inicial (`/transacciones/nueva`)
@@ -402,19 +466,50 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 - [x] Vista detalle de cliente con historial — stats (vendido/cobrado/debe) + lista de transacciones con badges
 
 ### Fase 2 — Proveedores + imagen WA (3–5 días)
+
 - [x] CRUD proveedores — lista con búsqueda, nuevo, detalle con historial, editar (`/proveedores`, `/proveedores/nuevo`, `/proveedores/[id]`, `/proveedores/[id]/editar`)
 - [x] Flujo completo nueva compra — combobox proveedor/producto, autocomplete precio, pago inicial, campo comisión cueva (`/compras/nueva`, `/compras/[id]`)
 - [x] Generación de imagen PNG del estado de cuenta — `html-to-image`, botón en detalle de cliente, tabla con pendientes + totales
 - [x] PWA: manifest + service worker — íconos 192/512, shortcuts, meta tags iOS, SW cache-first para shell
 
 ### Fase 3 — Polish MVP (2–3 días) ✅ Completada
+
 - [x] Buscadores en listas — SearchInput con debounce en clientes, proveedores y productos; Combobox async en ventas/compras
 - [x] Validaciones de formularios — cliente/servidor en todas las rutas; mensajes de error en rojo; botones deshabilitados durante carga
 - [x] Estados vacíos y manejo de errores — empty states en todas las listas; feedback visual inmediato en formularios
 - [x] Testing básico de flujos críticos — Vitest (27 tests): utils, validación de venta y validación de pago parcial; build de producción limpio
 - [ ] Deploy en Vercel + Railway — `vercel.json` creado; pendiente: configurar env vars en Vercel dashboard y conectar Railway DB
 
+### Fase 3.5 — v0.2: Libro diario + edición de registros
+
+> Estos ítems representan el switch de modelo de negocio acordado con el cliente. Deben implementarse en orden para evitar estados inconsistentes en la DB.
+
+**Modelo de datos**
+
+- [ ] Migración Prisma: agregar `account_payments` y `supplier_payments` con `status`
+- [ ] Migración Prisma: agregar campo `status` a `transactions` y `purchases`
+- [ ] Migración Prisma: eliminar `amount_paid` y `balance_due` de `transactions` y `purchases`
+- [ ] Actualizar `customer.balance_due` y `supplier.balance_due` para calcularse desde las nuevas tablas
+
+**Backend**
+
+- [ ] API `POST /api/cobros` — crear cobro libre sobre cuenta de cliente
+- [ ] API `PUT /api/cobros/:id` y `PATCH /api/cobros/:id/cancelar`
+- [ ] API `PUT /api/transacciones/:id` y `PATCH /api/transacciones/:id/cancelar`
+- [ ] API `GET /api/clientes/:id/estado-cuenta` — retorna ventas + cobros ordenados `date ASC`
+- [ ] Espejo para proveedores: `pagos-proveedor` + `/estado-cuenta`
+
+**Frontend**
+
+- [ ] Estado de cuenta: cambiar orden a `date ASC` (más antiguo primero)
+- [ ] Estado de cuenta: columnas **Debe / Haber / Saldo** con running balance por fila
+- [ ] Formulario "Registrar cobro" desde detalle de cliente (monto, método, fecha, descripción libre)
+- [ ] Botón "Editar" en cada fila del historial (ventas y cobros)
+- [ ] Botón "Anular" en cada fila del historial con confirmación; muestra badge "Anulado" en filas canceladas
+- [ ] Fix UI imagen PNG: descripción con `text-overflow: ellipsis` o `max-width` fijo, columnas numéricas con ancho mínimo garantizado
+
 ### Fase 4 — Multi-tenant real (futuro)
+
 - [ ] Onboarding self-service
 - [ ] WhatsApp Business API
 - [ ] Dashboard de métricas por tenant
@@ -423,26 +518,28 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 
 ## 11. Decisiones técnicas registradas
 
-| Decisión | Alternativa descartada | Razón |
-|---|---|---|
-| Multi-tenant por `tenant_id` en columna | Schema separado por tenant | Más simple para MVP, migrable a futuro |
-| `balance_due` desnormalizado | Calculado en query siempre | Performance en listas con muchos clientes |
-| Precio histórico en `unit_price` | Referencia al precio del producto | Los precios cambian; el precio cobrado no debe cambiar |
-| Generación de imagen en cliente | Servicio de render server-side | Sin infraestructura extra, funciona offline |
-| Next.js monorepo | Backend separado (Express) | Suficiente para MVP, split fácil si escala |
+| Decisión                                | Alternativa descartada            | Razón                                                  |
+| --------------------------------------- | --------------------------------- | ------------------------------------------------------ |
+| Multi-tenant por `tenant_id` en columna | Schema separado por tenant        | Más simple para MVP, migrable a futuro                 |
+| `balance_due` desnormalizado            | Calculado en query siempre        | Performance en listas con muchos clientes              |
+| Precio histórico en `unit_price`        | Referencia al precio del producto | Los precios cambian; el precio cobrado no debe cambiar |
+| Generación de imagen en cliente         | Servicio de render server-side    | Sin infraestructura extra, funciona offline            |
+| Next.js monorepo                        | Backend separado (Express)        | Suficiente para MVP, split fácil si escala             |
 
 ---
 
 ## 12. Glosario
 
-| Término en el sistema | Significado en el negocio |
-|---|---|
-| `customer` | Ferretería o taller que le compra a mi cliente |
-| `supplier` | Proveedor que le vende mercadería a mi cliente |
-| `transaction` | Venta realizada a un cliente |
-| `purchase` | Compra realizada a un proveedor |
-| `payment` | Pago (total o parcial) sobre una venta |
-| `purchase_payment` | Pago sobre una compra a proveedor |
-| `balance_due` | Saldo pendiente de cobro o de pago |
-| `price_type` | Modalidad de precio: lista, crédito, transferencia, contado |
-| `commission_pct` | Porcentaje de comisión de "cueva" en pagos por transferencia |
+| Término en el sistema | Significado en el negocio                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `customer`            | Ferretería o taller que le compra a mi cliente                                                               |
+| `supplier`            | Proveedor que le vende mercadería a mi cliente                                                               |
+| `transaction`         | Venta realizada a un cliente                                                                                 |
+| `purchase`            | Compra realizada a un proveedor                                                                              |
+| `account_payment`     | Cobro libre registrado sobre la cuenta total del cliente (no vinculado a una venta)                          |
+| `supplier_payment`    | Pago libre registrado sobre la cuenta total del proveedor                                                    |
+| `status`              | Estado de un registro: `active` (válido) o `cancelled` (anulado, sin efecto en saldo)                        |
+| `balance_due`         | Saldo pendiente global: suma de ventas activas menos suma de cobros activos                                  |
+| `price_type`          | Modalidad de precio: lista, crédito, transferencia, contado                                                  |
+| `commission_pct`      | Porcentaje de comisión de "cueva" en pagos por transferencia                                                 |
+| libro diario          | Nombre coloquial para el estado de cuenta en formato de entradas cronológicas (Debe / Haber / Saldo corrido) |

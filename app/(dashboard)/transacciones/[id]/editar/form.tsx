@@ -3,10 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Combobox } from "@/components/combobox";
-import { fmt } from "@/lib/utils";
-
-type Customer = { id: string; name: string };
 
 const PRICE_LABELS: Record<string, string> = {
   lista: "Lista",
@@ -18,23 +14,26 @@ const PRICE_LABELS: Record<string, string> = {
 const inputClass =
   "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
-export function NuevaVentaForm({
-  customers,
-  defaultClienteId,
-}: {
-  customers: Customer[];
-  defaultClienteId?: string;
-}) {
-  const router = useRouter();
-  const today = new Date().toISOString().split("T")[0];
+interface Transaction {
+  id: string;
+  customerId: string;
+  productName: string;
+  quantity: number;
+  priceType: string;
+  unitPrice: number;
+  date: string;
+  notes: string;
+}
 
-  const [clienteId, setClienteId] = useState(defaultClienteId ?? "");
-  const [productoName, setProductoName] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [priceType, setPriceType] = useState("lista");
-  const [unitPrice, setUnitPrice] = useState("");
-  const [notes, setNotes] = useState("");
-  const [date, setDate] = useState(today);
+export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
+  const router = useRouter();
+
+  const [productName, setProductName] = useState(transaction.productName);
+  const [quantity, setQuantity] = useState(String(transaction.quantity));
+  const [priceType, setPriceType] = useState(transaction.priceType);
+  const [unitPrice, setUnitPrice] = useState(String(transaction.unitPrice));
+  const [date, setDate] = useState(transaction.date);
+  const [notes, setNotes] = useState(transaction.notes);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,35 +43,30 @@ export function NuevaVentaForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!clienteId || !productoName.trim()) {
-      setError("Seleccioná un cliente e ingresá el producto");
-      return;
-    }
     setLoading(true);
     setError("");
 
-    const res = await fetch("/api/transacciones", {
-      method: "POST",
+    const res = await fetch(`/api/transacciones/${transaction.id}`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerId: clienteId,
-        productName: productoName.trim(),
+        productName: productName.trim(),
         quantity: qty,
         priceType,
         unitPrice: price,
-        notes: notes || undefined,
         date,
+        notes: notes || undefined,
       }),
     });
 
     if (!res.ok) {
       const data = await res.json();
-      setError(data.error ?? "Error al registrar la venta");
+      setError(data.error ?? "Error al guardar los cambios");
       setLoading(false);
       return;
     }
 
-    router.push(`/clientes/${clienteId}`);
+    router.push(`/clientes/${transaction.customerId}`);
     router.refresh();
   }
 
@@ -80,44 +74,27 @@ export function NuevaVentaForm({
     <form onSubmit={handleSubmit} className="space-y-5 pb-8">
       <div className="flex items-center gap-3">
         <Link
-          href={clienteId ? `/clientes/${clienteId}` : "/clientes"}
+          href={`/clientes/${transaction.customerId}`}
           className="text-gray-400 text-lg"
         >
           ←
         </Link>
-        <h1 className="text-lg font-semibold text-gray-900">Nueva venta</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Editar venta</h1>
       </div>
 
-      {/* Cliente */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Cliente <span className="text-red-500">*</span>
-        </label>
-        <Combobox
-          options={customers.map((c) => ({ id: c.id, label: c.name }))}
-          value={clienteId}
-          onChange={setClienteId}
-          placeholder="Buscar cliente..."
-          required
-        />
-      </div>
-
-      {/* Producto */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Producto <span className="text-red-500">*</span>
+          Producto
         </label>
         <input
           type="text"
-          value={productoName}
-          onChange={(e) => setProductoName(e.target.value)}
-          placeholder='Ej: Llave inglesa 12"'
+          value={productName}
+          onChange={(e) => setProductName(e.target.value)}
           required
           className={inputClass}
         />
       </div>
 
-      {/* Cantidad + tipo de precio */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -151,7 +128,6 @@ export function NuevaVentaForm({
         </div>
       </div>
 
-      {/* Precio unitario */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           Precio unitario
@@ -168,17 +144,18 @@ export function NuevaVentaForm({
         />
       </div>
 
-      {/* Total */}
       {total > 0 && (
         <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
-          <span className="text-sm text-gray-600">Total a cargar</span>
+          <span className="text-sm text-gray-600">Total</span>
           <span className="text-base font-semibold text-gray-900">
-            {fmt(total)}
+            {total.toLocaleString("es-AR", {
+              style: "currency",
+              currency: "ARS",
+            })}
           </span>
         </div>
       )}
 
-      {/* Fecha */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           Fecha
@@ -192,7 +169,6 @@ export function NuevaVentaForm({
         />
       </div>
 
-      {/* Notas */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           Notas (opcional)
@@ -213,16 +189,10 @@ export function NuevaVentaForm({
 
       <button
         type="submit"
-        disabled={
-          loading ||
-          !clienteId ||
-          !productoName.trim() ||
-          !unitPrice ||
-          qty <= 0
-        }
+        disabled={loading || !productName.trim() || qty <= 0 || price <= 0}
         className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
       >
-        {loading ? "Registrando..." : "Registrar venta"}
+        {loading ? "Guardando..." : "Guardar cambios"}
       </button>
     </form>
   );

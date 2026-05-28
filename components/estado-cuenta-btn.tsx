@@ -4,20 +4,27 @@ import { useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { fmt, fmtDate } from "@/lib/utils";
 
-interface Transaction {
-  id: string;
-  date: string | Date;
-  product: { name: string; unit: string | null };
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-  amountPaid: number;
-  balanceDue: number;
-}
+export type LedgerEntry =
+  | {
+      kind: "venta";
+      id: string;
+      date: string | Date;
+      description: string;
+      amount: number;
+      status: string;
+    }
+  | {
+      kind: "cobro";
+      id: string;
+      date: string | Date;
+      description: string;
+      amount: number;
+      status: string;
+    };
 
 interface Props {
   customerName: string;
-  transactions: Transaction[];
+  entries: LedgerEntry[];
   totalVendido: number;
   totalCobrado: number;
   saldo: number;
@@ -25,7 +32,7 @@ interface Props {
 
 export function EstadoCuentaBtn({
   customerName,
-  transactions,
+  entries,
   totalVendido,
   totalCobrado,
   saldo,
@@ -37,7 +44,10 @@ export function EstadoCuentaBtn({
     if (!ref.current) return;
     setGenerating(true);
     try {
-      const dataUrl = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+      const dataUrl = await toPng(ref.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+      });
       const link = document.createElement("a");
       link.download = `estado-${customerName.replace(/\s+/g, "-").toLowerCase()}.png`;
       link.href = dataUrl;
@@ -47,13 +57,25 @@ export function EstadoCuentaBtn({
     }
   }
 
-  const pendingTxs = transactions.filter((t) => t.balanceDue > 0);
+  // Ordenar de más antiguo a más nuevo y calcular saldo corrido
+  const sorted = [...entries].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
+  let running = 0;
+  const rows = sorted
+    .filter((e) => e.status === "active")
+    .map((e) => {
+      if (e.kind === "venta") running += e.amount;
+      else running -= e.amount;
+      return { ...e, running };
+    });
 
   return (
     <div>
       <button
         onClick={handleGenerate}
-        disabled={generating || transactions.length === 0}
+        disabled={generating || entries.length === 0}
         className="flex items-center justify-center w-full border border-indigo-200 text-indigo-600 text-sm font-medium py-3 rounded-xl mb-4 hover:bg-indigo-50 disabled:opacity-40 transition-colors"
       >
         {generating ? "Generando imagen..." : "Ver estado de cuenta"}
@@ -63,98 +85,226 @@ export function EstadoCuentaBtn({
       <div className="fixed -left-[9999px] top-0 pointer-events-none">
         <div
           ref={ref}
-          style={{ width: 640, fontFamily: "system-ui, sans-serif", background: "#fff", padding: 32 }}
+          style={{
+            width: 680,
+            fontFamily: "system-ui, sans-serif",
+            background: "#fff",
+            padding: 32,
+          }}
         >
           {/* Header */}
           <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
+            <p
+              style={{
+                fontSize: 11,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: 1,
+                marginBottom: 4,
+              }}
+            >
               Estado de cuenta
             </p>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: 0 }}>
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                color: "#111827",
+                margin: 0,
+              }}
+            >
               {customerName}
             </h1>
             <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
-              {new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" })}
+              {new Date().toLocaleDateString("es-AR", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              })}
             </p>
           </div>
 
           {/* Summary boxes */}
           <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
             {[
-              { label: "Total vendido", value: fmt(totalVendido), color: "#111827" },
-              { label: "Total cobrado", value: fmt(totalCobrado), color: "#059669" },
-              { label: "Saldo pendiente", value: fmt(saldo), color: saldo > 0 ? "#d97706" : "#059669" },
+              {
+                label: "Total vendido",
+                value: fmt(totalVendido),
+                color: "#111827",
+              },
+              {
+                label: "Total cobrado",
+                value: fmt(totalCobrado),
+                color: "#059669",
+              },
+              {
+                label: "Saldo pendiente",
+                value: fmt(saldo),
+                color: saldo > 0 ? "#d97706" : "#059669",
+              },
             ].map((s) => (
               <div
                 key={s.label}
-                style={{ flex: 1, background: "#f9fafb", borderRadius: 10, padding: "12px 14px" }}
+                style={{
+                  flex: 1,
+                  background: "#f9fafb",
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                }}
               >
-                <p style={{ fontSize: 10, color: "#9ca3af", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: "#9ca3af",
+                    marginBottom: 4,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
                   {s.label}
                 </p>
-                <p style={{ fontSize: 15, fontWeight: 700, color: s.color, margin: 0 }}>{s.value}</p>
+                <p
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: s.color,
+                    margin: 0,
+                  }}
+                >
+                  {s.value}
+                </p>
               </div>
             ))}
           </div>
 
-          {/* Table */}
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          {/* Libro diario */}
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: 12,
+              tableLayout: "fixed",
+            }}
+          >
+            <colgroup>
+              <col style={{ width: 72 }} />
+              <col style={{ width: "auto" }} />
+              <col style={{ width: 88 }} />
+              <col style={{ width: 88 }} />
+              <col style={{ width: 88 }} />
+            </colgroup>
             <thead>
               <tr style={{ background: "#f3f4f6" }}>
-                {["Fecha", "Producto", "Cant.", "Precio", "Pagado", "Debe"].map((h) => (
+                {[
+                  { label: "Fecha", align: "left" },
+                  { label: "Descripción", align: "left" },
+                  { label: "Debe", align: "right" },
+                  { label: "Haber", align: "right" },
+                  { label: "Saldo", align: "right" },
+                ].map(({ label, align }) => (
                   <th
-                    key={h}
+                    key={label}
                     style={{
                       padding: "8px 10px",
-                      textAlign: h === "Fecha" || h === "Producto" ? "left" : "right",
+                      textAlign: align as "left" | "right",
                       color: "#6b7280",
                       fontWeight: 600,
                       fontSize: 11,
                     }}
                   >
-                    {h}
+                    {label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {(pendingTxs.length > 0 ? pendingTxs : transactions).map((t, i) => (
+              {rows.map((row, i) => (
                 <tr
-                  key={t.id}
+                  key={row.id}
                   style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}
                 >
-                  <td style={{ padding: "8px 10px", color: "#374151" }}>{fmtDate(t.date)}</td>
-                  <td style={{ padding: "8px 10px", color: "#111827", fontWeight: 500 }}>
-                    {t.product.name}
-                  </td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", color: "#374151" }}>
-                    {t.quantity} {t.product.unit ?? "u."}
-                  </td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", color: "#374151" }}>
-                    {fmt(t.unitPrice)}
-                  </td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", color: "#059669" }}>
-                    {fmt(t.amountPaid)}
+                  <td
+                    style={{
+                      padding: "7px 10px",
+                      color: "#6b7280",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fmtDate(row.date)}
                   </td>
                   <td
                     style={{
-                      padding: "8px 10px",
+                      padding: "7px 10px",
+                      color: "#111827",
+                      fontWeight: row.kind === "venta" ? 500 : 400,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: 0,
+                    }}
+                    title={row.description}
+                  >
+                    {row.description}
+                  </td>
+                  <td
+                    style={{
+                      padding: "7px 10px",
                       textAlign: "right",
-                      fontWeight: 600,
-                      color: t.balanceDue > 0 ? "#d97706" : "#059669",
+                      color: "#111827",
                     }}
                   >
-                    {t.balanceDue > 0 ? fmt(t.balanceDue) : "Saldada"}
+                    {row.kind === "venta" ? fmt(row.amount) : "—"}
+                  </td>
+                  <td
+                    style={{
+                      padding: "7px 10px",
+                      textAlign: "right",
+                      color: "#059669",
+                    }}
+                  >
+                    {row.kind === "cobro" ? fmt(row.amount) : "—"}
+                  </td>
+                  <td
+                    style={{
+                      padding: "7px 10px",
+                      textAlign: "right",
+                      fontWeight: 600,
+                      color: row.running > 0 ? "#d97706" : "#059669",
+                    }}
+                  >
+                    {fmt(row.running)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr style={{ background: "#f3f4f6", fontWeight: 700 }}>
-                <td colSpan={4} style={{ padding: "10px 10px", color: "#111827" }}>
+                <td
+                  colSpan={2}
+                  style={{
+                    padding: "10px 10px",
+                    color: "#111827",
+                    fontSize: 13,
+                  }}
+                >
                   Total
                 </td>
-                <td style={{ padding: "10px 10px", textAlign: "right", color: "#059669" }}>
+                <td
+                  style={{
+                    padding: "10px 10px",
+                    textAlign: "right",
+                    color: "#111827",
+                  }}
+                >
+                  {fmt(totalVendido)}
+                </td>
+                <td
+                  style={{
+                    padding: "10px 10px",
+                    textAlign: "right",
+                    color: "#059669",
+                  }}
+                >
                   {fmt(totalCobrado)}
                 </td>
                 <td
@@ -171,8 +321,14 @@ export function EstadoCuentaBtn({
             </tfoot>
           </table>
 
-          {/* Footer */}
-          <p style={{ fontSize: 10, color: "#d1d5db", textAlign: "center", marginTop: 20 }}>
+          <p
+            style={{
+              fontSize: 10,
+              color: "#d1d5db",
+              textAlign: "center",
+              marginTop: 20,
+            }}
+          >
             Clientesk
           </p>
         </div>

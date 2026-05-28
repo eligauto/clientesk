@@ -2,8 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getTenantId } from "@/lib/tenant";
-import { SaldoBadge, StatusBadge } from "@/components/saldo-badge";
+import { PagoProveedorForm } from "@/components/pago-proveedor-form";
+import { CancelEntryBtn } from "@/components/cancel-entry-btn";
 import { fmt, fmtDate } from "@/lib/utils";
+
+const METHOD_LABEL: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  cheque: "Cheque",
+};
 
 export default async function ProveedorDetallePage({
   params,
@@ -12,37 +19,75 @@ export default async function ProveedorDetallePage({
 }) {
   const tenantId = await getTenantId();
 
-  const [supplier, purchases, stats] = await Promise.all([
+  const [supplier, purchases, pagos] = await Promise.all([
     prisma.supplier.findFirst({ where: { id: params.id, tenantId } }),
     prisma.purchase.findMany({
       where: { supplierId: params.id, tenantId },
-      include: {
-        product: { select: { name: true, unit: true } },
-        _count: { select: { purchasePayments: true } },
-      },
-      orderBy: { date: "desc" },
+      include: { product: { select: { name: true, unit: true } } },
+      orderBy: { date: "asc" },
     }),
-    prisma.purchase.aggregate({
+    prisma.supplierPayment.findMany({
       where: { supplierId: params.id, tenantId },
-      _sum: { totalAmount: true, amountPaid: true },
+      orderBy: { date: "asc" },
     }),
   ]);
 
   if (!supplier) notFound();
 
-  const totalComprado = Number(stats._sum.totalAmount ?? 0);
-  const totalPagado = Number(stats._sum.amountPaid ?? 0);
+  const totalComprado = purchases
+    .filter((p) => p.status === "active")
+    .reduce((s, p) => s + Number(p.totalAmount), 0);
+  const totalPagado = pagos
+    .filter((p) => p.status === "active")
+    .reduce((s, p) => s + Number(p.amount), 0);
   const saldo = Number(supplier.balanceDue);
+
+  // Historial unificado ordenado por fecha ASC
+  type HistoryEntry = {
+    kind: "compra" | "pago";
+    id: string;
+    date: Date;
+    description: string;
+    amount: number;
+    status: string;
+    extra?: string;
+  };
+
+  const history: HistoryEntry[] = [
+    ...purchases.map((p) => ({
+      kind: "compra" as const,
+      id: p.id,
+      date: p.date,
+      description: p.product.name,
+      amount: Number(p.totalAmount),
+      status: p.status,
+      extra: `${Number(p.quantity)} ${p.product.unit ?? "u."}`,
+    })),
+    ...pagos.map((p) => ({
+      kind: "pago" as const,
+      id: p.id,
+      date: p.date,
+      description: p.notes ?? "Pago",
+      amount: Number(p.amount),
+      status: p.status,
+      extra: METHOD_LABEL[p.method] ?? p.method,
+    })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <Link href="/proveedores" className="text-xs text-gray-400 mb-1 block">
+          <Link
+            href="/proveedores"
+            className="text-xs text-gray-400 mb-1 block"
+          >
             ← Proveedores
           </Link>
-          <h1 className="text-xl font-semibold text-gray-900">{supplier.name}</h1>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {supplier.name}
+          </h1>
           {supplier.phoneWhatsapp && (
             <a
               href={`tel:${supplier.phoneWhatsapp}`}
@@ -67,67 +112,119 @@ export default async function ProveedorDetallePage({
       <div className="grid grid-cols-3 gap-2 mb-6">
         <div className="bg-white rounded-xl p-3 border border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-1">Comprado</p>
-          <p className="text-sm font-semibold text-gray-900">{fmt(totalComprado)}</p>
+          <p className="text-sm font-semibold text-gray-900">
+            {fmt(totalComprado)}
+          </p>
         </div>
         <div className="bg-white rounded-xl p-3 border border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-1">Pagado</p>
-          <p className="text-sm font-semibold text-gray-900">{fmt(totalPagado)}</p>
+          <p className="text-sm font-semibold text-gray-900">
+            {fmt(totalPagado)}
+          </p>
         </div>
         <div className="bg-white rounded-xl p-3 border border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-1">Debe</p>
-          <p className={`text-sm font-semibold ${saldo > 0 ? "text-amber-600" : "text-green-600"}`}>
+          <p
+            className={`text-sm font-semibold ${saldo > 0 ? "text-amber-600" : "text-green-600"}`}
+          >
             {fmt(saldo)}
           </p>
         </div>
       </div>
 
       {/* Actions */}
-      <Link
-        href={`/compras/nueva?proveedorId=${supplier.id}`}
-        className="flex items-center justify-center w-full bg-indigo-600 text-white text-sm font-medium py-3 rounded-xl mb-6"
-      >
-        + Nueva compra
-      </Link>
+      <div className="space-y-2 mb-6">
+        <Link
+          href={`/compras/nueva?proveedorId=${supplier.id}`}
+          className="flex items-center justify-center w-full bg-indigo-600 text-white text-sm font-medium py-3 rounded-xl"
+        >
+          + Nueva compra
+        </Link>
+        <PagoProveedorForm supplierId={supplier.id} />
+      </div>
 
-      {/* Purchase history */}
+      {/* Historial unificado */}
       <h2 className="text-sm font-medium text-gray-700 mb-3">
-        Historial ({purchases.length})
+        Historial ({history.length})
       </h2>
 
-      {purchases.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-10">Sin compras registradas</p>
+      {history.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-10">
+          Sin movimientos registrados
+        </p>
       ) : (
         <ul className="space-y-2">
-          {purchases.map((p) => (
-            <li key={p.id}>
-              <Link
-                href={`/compras/${p.id}`}
-                className="block bg-white rounded-xl p-4 border border-gray-100 hover:border-indigo-200 transition-colors"
+          {history.map((entry) => {
+            const cancelled = entry.status === "cancelled";
+            const editHref =
+              entry.kind === "compra"
+                ? `/compras/${entry.id}/editar`
+                : `/pagos-proveedor/${entry.id}/editar`;
+            const cancelEndpoint =
+              entry.kind === "compra"
+                ? `/api/compras/${entry.id}/cancelar`
+                : `/api/pagos-proveedor/${entry.id}/cancelar`;
+
+            return (
+              <li
+                key={`${entry.kind}-${entry.id}`}
+                className={`bg-white rounded-xl p-4 border transition-colors ${
+                  cancelled ? "border-gray-100 opacity-50" : "border-gray-100"
+                }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {p.product.name}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                          entry.kind === "compra"
+                            ? "bg-indigo-50 text-indigo-600"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {entry.kind === "compra" ? "Compra" : "Pago"}
+                      </span>
+                      {cancelled && (
+                        <span className="text-xs text-red-400 font-medium">
+                          Anulado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 truncate mt-1">
+                      {entry.description}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(p.date)} · {Number(p.quantity)} {p.product.unit ?? "u."}
+                      {fmtDate(entry.date)}
+                      {entry.extra ? ` · ${entry.extra}` : ""}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {fmt(Number(p.totalAmount))}
+                    <p
+                      className={`text-sm font-semibold ${
+                        entry.kind === "compra"
+                          ? "text-gray-900"
+                          : "text-green-700"
+                      }`}
+                    >
+                      {entry.kind === "pago" ? "+" : ""}
+                      {fmt(entry.amount)}
                     </p>
-                    <div className="mt-1">
-                      <StatusBadge
-                        balanceDue={Number(p.balanceDue)}
-                        totalAmount={Number(p.totalAmount)}
-                      />
-                    </div>
+                    {!cancelled && (
+                      <div className="flex items-center gap-2 mt-1 justify-end">
+                        <Link
+                          href={editHref}
+                          className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+                        >
+                          Editar
+                        </Link>
+                        <CancelEntryBtn endpoint={cancelEndpoint} />
+                      </div>
+                    )}
                   </div>
                 </div>
-              </Link>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

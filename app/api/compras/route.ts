@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/api";
 import { prisma } from "@/lib/db";
-import { PriceType, PaymentMethod } from "@prisma/client";
+import { PriceType } from "@prisma/client";
 
 export const POST = withTenant(async (req, tenantId) => {
   const {
@@ -11,8 +11,6 @@ export const POST = withTenant(async (req, tenantId) => {
     priceType,
     unitPrice,
     commissionPct,
-    initialPayment,
-    paymentMethod,
     notes,
     date,
   } = await req.json();
@@ -27,7 +25,6 @@ export const POST = withTenant(async (req, tenantId) => {
   const qty = Number(quantity);
   const price = Number(unitPrice);
   const commission = Number(commissionPct ?? 0);
-  const payment = Number(initialPayment ?? 0);
 
   if (qty <= 0 || price <= 0) {
     return NextResponse.json(
@@ -40,18 +37,6 @@ export const POST = withTenant(async (req, tenantId) => {
   }
 
   const totalAmount = qty * price;
-
-  if (payment < 0 || payment > totalAmount) {
-    return NextResponse.json(
-      {
-        error: "El pago inicial no puede superar el total",
-        code: "VALIDATION_ERROR",
-      },
-      { status: 400 },
-    );
-  }
-
-  const balanceDue = totalAmount - payment;
   const purchaseDate = date ? new Date(date) : new Date();
 
   const purchase = await prisma.$transaction(async (tx) => {
@@ -64,33 +49,30 @@ export const POST = withTenant(async (req, tenantId) => {
         priceType: priceType as PriceType,
         unitPrice: price,
         totalAmount,
-        amountPaid: payment,
-        balanceDue,
         commissionPct: commission,
         date: purchaseDate,
         notes: notes?.trim() || null,
       },
     });
 
-    if (payment > 0) {
-      await tx.purchasePayment.create({
-        data: {
-          tenantId,
-          purchaseId: p.id,
-          amount: payment,
-          method: ((paymentMethod as string) ?? "efectivo") as PaymentMethod,
-        },
-      });
-    }
-
-    const { _sum } = await tx.purchase.aggregate({
-      where: { supplierId, tenantId },
-      _sum: { balanceDue: true },
-    });
+    const [purchaseSum, paySum] = await Promise.all([
+      tx.purchase.aggregate({
+        where: { supplierId, tenantId, status: "active" },
+        _sum: { totalAmount: true },
+      }),
+      tx.supplierPayment.aggregate({
+        where: { supplierId, tenantId, status: "active" },
+        _sum: { amount: true },
+      }),
+    ]);
 
     await tx.supplier.update({
       where: { id: supplierId },
-      data: { balanceDue: _sum.balanceDue ?? 0 },
+      data: {
+        balanceDue:
+          Number(purchaseSum._sum.totalAmount ?? 0) -
+          Number(paySum._sum.amount ?? 0),
+      },
     });
 
     return p;
@@ -102,8 +84,6 @@ export const POST = withTenant(async (req, tenantId) => {
       quantity: Number(purchase.quantity),
       unitPrice: Number(purchase.unitPrice),
       totalAmount: Number(purchase.totalAmount),
-      amountPaid: Number(purchase.amountPaid),
-      balanceDue: Number(purchase.balanceDue),
       commissionPct: Number(purchase.commissionPct),
     },
     { status: 201 },

@@ -2,10 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getTenantId } from "@/lib/tenant";
-import { SaldoBadge, StatusBadge } from "@/components/saldo-badge";
-import { EstadoCuentaBtn } from "@/components/estado-cuenta-btn";
+import {
+  EstadoCuentaBtn,
+  type LedgerEntry,
+} from "@/components/estado-cuenta-btn";
+import { CobroForm } from "@/components/cobro-form";
+import { CancelEntryBtn } from "@/components/cancel-entry-btn";
 import { fmt, fmtDate } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
+
+const METHOD_LABEL: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  cheque: "Cheque",
+};
 
 export default async function ClienteDetallePage({
   params,
@@ -14,27 +24,72 @@ export default async function ClienteDetallePage({
 }) {
   const tenantId = await getTenantId();
 
-  const [customer, transactions, stats] = await Promise.all([
+  const [customer, transactions, cobros] = await Promise.all([
     prisma.customer.findFirst({ where: { id: params.id, tenantId } }),
     prisma.transaction.findMany({
       where: { customerId: params.id, tenantId },
-      include: {
-        product: { select: { name: true, unit: true } } as any,
-        _count: { select: { payments: true } },
-      },
-      orderBy: { date: "desc" },
+      include: { product: { select: { name: true, unit: true } } as any },
+      orderBy: { date: "asc" },
     }),
-    prisma.transaction.aggregate({
+    prisma.accountPayment.findMany({
       where: { customerId: params.id, tenantId },
-      _sum: { totalAmount: true, amountPaid: true },
+      orderBy: { date: "asc" },
     }),
   ]);
 
   if (!customer) notFound();
 
-  const totalVendido = Number(stats._sum.totalAmount ?? 0);
-  const totalCobrado = Number(stats._sum.amountPaid ?? 0);
+  // Saldo y stats solo sobre entradas activas
+  const totalVendido = transactions
+    .filter((t) => t.status === "active")
+    .reduce((s, t) => s + Number(t.totalAmount), 0);
+  const totalCobrado = cobros
+    .filter((c) => c.status === "active")
+    .reduce((s, c) => s + Number(c.amount), 0);
   const saldo = Number(customer.balanceDue);
+
+  // Historial unificado ordenado por fecha ASC
+  type HistoryEntry = {
+    kind: "venta" | "cobro";
+    id: string;
+    date: Date;
+    description: string;
+    amount: number;
+    status: string;
+    extra?: string;
+  };
+
+  const history: HistoryEntry[] = [
+    ...transactions.map((t) => ({
+      kind: "venta" as const,
+      id: t.id,
+      date: t.date,
+      description:
+        (t as any).product?.name ?? (t as any).productName ?? "Venta",
+      amount: Number(t.totalAmount),
+      status: t.status,
+      extra: `${Number(t.quantity)} ${(t as any).product?.unit ?? "u."}`,
+    })),
+    ...cobros.map((c) => ({
+      kind: "cobro" as const,
+      id: c.id,
+      date: c.date,
+      description: c.notes ?? "Cobro",
+      amount: Number(c.amount),
+      status: c.status,
+      extra: METHOD_LABEL[c.method] ?? c.method,
+    })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Entradas para el estado de cuenta
+  const ledgerEntries: LedgerEntry[] = history.map((h) => ({
+    kind: h.kind,
+    id: h.id,
+    date: h.date,
+    description: h.description,
+    amount: h.amount,
+    status: h.status,
+  }));
 
   return (
     <div>
@@ -44,7 +99,9 @@ export default async function ClienteDetallePage({
           <Link href="/clientes" className="text-xs text-gray-400 mb-1 block">
             ← Clientes
           </Link>
-          <h1 className="text-xl font-semibold text-gray-900">{customer.name}</h1>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {customer.name}
+          </h1>
           {customer.phoneWhatsapp && (
             <a
               href={`tel:${customer.phoneWhatsapp}`}
@@ -82,9 +139,7 @@ export default async function ClienteDetallePage({
         <div className="bg-white rounded-xl p-3 border border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-1">Debe</p>
           <p
-            className={`text-sm font-semibold ${
-              saldo > 0 ? "text-amber-600" : "text-green-600"
-            }`}
+            className={`text-sm font-semibold ${saldo > 0 ? "text-amber-600" : "text-green-600"}`}
           >
             {fmt(saldo)}
           </p>
@@ -99,64 +154,98 @@ export default async function ClienteDetallePage({
         >
           + Nueva venta
         </Link>
+        <CobroForm customerId={customer.id} />
         <EstadoCuentaBtn
           customerName={customer.name}
-          transactions={transactions.map((t) => ({
-            id: t.id,
-            date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
-            product: (t as any).product ?? { name: (t as any).productName ?? "Producto", unit: null },
-            quantity: Number(t.quantity),
-            unitPrice: Number(t.unitPrice),
-            totalAmount: Number(t.totalAmount),
-            amountPaid: Number(t.amountPaid),
-            balanceDue: Number(t.balanceDue),
-          }))}
+          entries={ledgerEntries}
           totalVendido={totalVendido}
           totalCobrado={totalCobrado}
           saldo={saldo}
         />
       </div>
 
-      {/* Transaction history */}
+      {/* Historial unificado */}
       <h2 className="text-sm font-medium text-gray-700 mb-3">
-        Historial ({transactions.length})
+        Historial ({history.length})
       </h2>
 
-      {transactions.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-10">Sin ventas registradas</p>
+      {history.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-10">
+          Sin movimientos registrados
+        </p>
       ) : (
         <ul className="space-y-2">
-          {transactions.map((t) => (
-            <li key={t.id}>
-              <Link
-                href={`/transacciones/${t.id}`}
-                className="block bg-white rounded-xl p-4 border border-gray-100 hover:border-indigo-200 transition-colors"
+          {history.map((entry) => {
+            const cancelled = entry.status === "cancelled";
+            const editHref =
+              entry.kind === "venta"
+                ? `/transacciones/${entry.id}/editar`
+                : `/cobros/${entry.id}/editar`;
+            const cancelEndpoint =
+              entry.kind === "venta"
+                ? `/api/transacciones/${entry.id}/cancelar`
+                : `/api/cobros/${entry.id}/cancelar`;
+
+            return (
+              <li
+                key={`${entry.kind}-${entry.id}`}
+                className={`bg-white rounded-xl p-4 border transition-colors ${
+                  cancelled ? "border-gray-100 opacity-50" : "border-gray-100"
+                }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {(t as any).product?.name ?? (t as any).productName ?? "Producto"}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                          entry.kind === "venta"
+                            ? "bg-indigo-50 text-indigo-600"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {entry.kind === "venta" ? "Venta" : "Cobro"}
+                      </span>
+                      {cancelled && (
+                        <span className="text-xs text-red-400 font-medium">
+                          Anulado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 truncate mt-1">
+                      {entry.description}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(t.date)} · {Number(t.quantity)}{" "}
-                      {(t as any).product?.unit ?? "u."}
+                      {fmtDate(entry.date)}
+                      {entry.extra ? ` · ${entry.extra}` : ""}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {fmt(Number(t.totalAmount))}
+                    <p
+                      className={`text-sm font-semibold ${
+                        entry.kind === "venta"
+                          ? "text-gray-900"
+                          : "text-green-700"
+                      }`}
+                    >
+                      {entry.kind === "cobro" ? "+" : ""}
+                      {fmt(entry.amount)}
                     </p>
-                    <div className="mt-1">
-                      <StatusBadge
-                        balanceDue={Number(t.balanceDue)}
-                        totalAmount={Number(t.totalAmount)}
-                      />
-                    </div>
+                    {!cancelled && (
+                      <div className="flex items-center gap-2 mt-1 justify-end">
+                        <Link
+                          href={editHref}
+                          className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+                        >
+                          Editar
+                        </Link>
+                        <CancelEntryBtn endpoint={cancelEndpoint} />
+                      </div>
+                    )}
                   </div>
                 </div>
-              </Link>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 

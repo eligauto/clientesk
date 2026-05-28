@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getAuth, UNAUTHORIZED } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } },
+) {
   const auth = await getAuth();
   if (!auth) return UNAUTHORIZED;
 
@@ -10,9 +13,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     where: { customerId: params.id, tenantId: auth.tenantId },
     include: {
       product: { select: { name: true, unit: true } },
-      payments: { orderBy: { paidAt: "desc" } },
     },
-    orderBy: { date: "desc" },
+    orderBy: { date: "asc" },
   });
 
   return NextResponse.json(
@@ -21,9 +23,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       quantity: Number(t.quantity),
       unitPrice: Number(t.unitPrice),
       totalAmount: Number(t.totalAmount),
-      amountPaid: Number(t.amountPaid),
-      balanceDue: Number(t.balanceDue),
-      payments: t.payments.map((p) => ({ ...p, amount: Number(p.amount) })),
-    }))
+    })),
   );
 }

@@ -21,13 +21,14 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     const txIds = transactions.map((t) => t.id);
 
     if (txIds.length > 0) {
-      await tx.payment.deleteMany({
-        where: { transactionId: { in: txIds }, tenantId: auth.tenantId },
-      });
       await tx.transaction.deleteMany({
         where: { id: { in: txIds }, tenantId: auth.tenantId },
       });
     }
+
+    await tx.accountPayment.deleteMany({
+      where: { customerId: params.id, tenantId: auth.tenantId },
+    });
 
     await tx.customer.delete({ where: { id: params.id } });
   });

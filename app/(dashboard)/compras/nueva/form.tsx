@@ -52,8 +52,6 @@ export function NuevaCompraForm({
   const [priceType, setPriceType] = useState("lista");
   const [unitPrice, setUnitPrice] = useState("");
   const [commissionPct, setCommissionPct] = useState("0");
-  const [initialPayment, setInitialPayment] = useState("0");
-  const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(today);
   const [loading, setLoading] = useState(false);
@@ -74,7 +72,11 @@ export function NuevaCompraForm({
 
   function handleProductSelect(id: string) {
     setProductoId(id);
-    if (!id) { setSelectedProduct(null); setUnitPrice(""); return; }
+    if (!id) {
+      setSelectedProduct(null);
+      setUnitPrice("");
+      return;
+    }
     fetch(`/api/productos/${id}/precios`)
       .then((r) => r.json())
       .then((p: Product) => {
@@ -95,9 +97,7 @@ export function NuevaCompraForm({
 
   const qty = parseFloat(quantity) || 0;
   const price = parseFloat(unitPrice) || 0;
-  const payment = parseFloat(initialPayment) || 0;
   const total = qty * price;
-  const balance = Math.max(0, total - payment);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,8 +118,6 @@ export function NuevaCompraForm({
         priceType,
         unitPrice: price,
         commissionPct: parseFloat(commissionPct) || 0,
-        initialPayment: payment,
-        paymentMethod: payment > 0 ? paymentMethod : undefined,
         notes: notes || undefined,
         date,
       }),
@@ -139,7 +137,10 @@ export function NuevaCompraForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-8">
       <div className="flex items-center gap-3">
-        <Link href={proveedorId ? `/proveedores/${proveedorId}` : "/proveedores"} className="text-gray-400 text-lg">
+        <Link
+          href={proveedorId ? `/proveedores/${proveedorId}` : "/proveedores"}
+          className="text-gray-400 text-lg"
+        >
           ←
         </Link>
         <h1 className="text-lg font-semibold text-gray-900">Nueva compra</h1>
@@ -199,7 +200,9 @@ export function NuevaCompraForm({
             className={inputClass}
           >
             {Object.entries(PRICE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
+              <option key={v} value={v}>
+                {l}
+              </option>
             ))}
           </select>
         </div>
@@ -225,8 +228,10 @@ export function NuevaCompraForm({
       {/* Total */}
       {total > 0 && (
         <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
-          <span className="text-sm text-gray-600">Total</span>
-          <span className="text-base font-semibold text-gray-900">{fmt(total)}</span>
+          <span className="text-sm text-gray-600">Total a cargar</span>
+          <span className="text-base font-semibold text-gray-900">
+            {fmt(total)}
+          </span>
         </div>
       )}
 
@@ -246,53 +251,6 @@ export function NuevaCompraForm({
           className={inputClass}
         />
       </div>
-
-      {/* Pago inicial */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Pago inicial
-          </label>
-          <input
-            type="number"
-            value={initialPayment}
-            onChange={(e) => setInitialPayment(e.target.value)}
-            min="0"
-            step="any"
-            className={inputClass}
-          />
-        </div>
-        {payment > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Método
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className={inputClass}
-            >
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="cheque">Cheque</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Saldo resultante */}
-      {total > 0 && balance > 0 && (
-        <div className="bg-amber-50 rounded-xl px-4 py-3 flex justify-between items-center">
-          <span className="text-sm text-amber-700">Queda debiendo</span>
-          <span className="text-base font-semibold text-amber-700">{fmt(balance)}</span>
-        </div>
-      )}
-      {total > 0 && balance === 0 && (
-        <div className="bg-green-50 rounded-xl px-4 py-3 flex justify-between items-center">
-          <span className="text-sm text-green-700">Saldo</span>
-          <span className="text-base font-semibold text-green-700">Saldada ✓</span>
-        </div>
-      )}
 
       {/* Fecha */}
       <div>
@@ -322,12 +280,16 @@ export function NuevaCompraForm({
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+          {error}
+        </p>
       )}
 
       <button
         type="submit"
-        disabled={loading || !proveedorId || !productoId || !unitPrice || qty <= 0}
+        disabled={
+          loading || !proveedorId || !productoId || !unitPrice || qty <= 0
+        }
         className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
       >
         {loading ? "Registrando..." : "Registrar compra"}
