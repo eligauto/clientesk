@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import { fmt, fmtDate } from "@/lib/utils";
 
@@ -39,8 +39,26 @@ export function EstadoCuentaBtn({
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
 
-  async function handleGenerate() {
+  // Load logo as base64 so html-to-image can embed it reliably
+  useEffect(() => {
+    fetch("/logo-ricardo.png")
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.blob();
+      })
+      .then((blob) => {
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onload = () => setLogoBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handlePreview() {
     if (!ref.current) return;
     setGenerating(true);
     try {
@@ -48,16 +66,21 @@ export function EstadoCuentaBtn({
         cacheBust: true,
         pixelRatio: 2,
       });
-      const link = document.createElement("a");
-      link.download = `estado-${customerName.replace(/\s+/g, "-").toLowerCase()}.png`;
-      link.href = dataUrl;
-      link.click();
+      setPreviewUrl(dataUrl);
     } finally {
       setGenerating(false);
     }
   }
 
-  // Ordenar de más antiguo a más nuevo y calcular saldo corrido
+  function handleDownload() {
+    if (!previewUrl) return;
+    const link = document.createElement("a");
+    link.download = `estado-${customerName.replace(/\s+/g, "-").toLowerCase()}.png`;
+    link.href = previewUrl;
+    link.click();
+  }
+
+  // Sort oldest → newest and calculate running balance
   const sorted = [...entries].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
@@ -74,12 +97,54 @@ export function EstadoCuentaBtn({
   return (
     <div>
       <button
-        onClick={handleGenerate}
+        onClick={handlePreview}
         disabled={generating || entries.length === 0}
         className="flex items-center justify-center w-full border border-indigo-200 text-indigo-600 text-sm font-medium py-3 rounded-xl mb-4 hover:bg-indigo-50 disabled:opacity-40 transition-colors"
       >
-        {generating ? "Generando imagen..." : "Ver estado de cuenta"}
+        {generating ? "Generando..." : "Ver estado de cuenta"}
       </button>
+
+      {/* Preview modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/80"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewUrl(null);
+          }}
+        >
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/60 shrink-0">
+            <span className="text-white text-sm font-medium">
+              Estado de cuenta — {customerName}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownload}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                Descargar
+              </button>
+              <button
+                onClick={() => setPreviewUrl(null)}
+                className="bg-white/10 hover:bg-white/20 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable image preview */}
+          <div className="flex-1 overflow-auto p-4 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="Preview estado de cuenta"
+              className="rounded-xl shadow-2xl h-auto max-w-full object-contain"
+              style={{ maxHeight: "calc(100vh - 80px)" }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Off-screen render target */}
       <div className="fixed -left-[9999px] top-0 pointer-events-none">
@@ -93,35 +158,53 @@ export function EstadoCuentaBtn({
           }}
         >
           {/* Header */}
-          <div style={{ marginBottom: 24 }}>
-            <p
-              style={{
-                fontSize: 11,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: 1,
-                marginBottom: 4,
-              }}
-            >
-              Estado de cuenta
-            </p>
-            <h1
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: "#111827",
-                margin: 0,
-              }}
-            >
-              {customerName}
-            </h1>
-            <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
-              {new Date().toLocaleDateString("es-AR", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              marginBottom: 24,
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  fontSize: 11,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 4,
+                }}
+              >
+                Estado de cuenta
+              </p>
+              <h1
+                style={{
+                  fontSize: 22,
+                  fontWeight: 700,
+                  color: "#111827",
+                  margin: 0,
+                }}
+              >
+                {customerName}
+              </h1>
+              <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
+                {new Date().toLocaleDateString("es-AR", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
+
+            {logoBase64 && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoBase64}
+                alt="Ricardo Herramientas"
+                style={{ height: 56, objectFit: "contain" }}
+              />
+            )}
           </div>
 
           {/* Summary boxes */}
@@ -329,7 +412,7 @@ export function EstadoCuentaBtn({
               marginTop: 20,
             }}
           >
-            Clientesk
+            Ricardo Herramientas
           </p>
         </div>
       </div>
