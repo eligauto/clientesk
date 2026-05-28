@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { FormField } from "@/components/form-field";
+import { FormError } from "@/components/form-error";
+import { BackLink } from "@/components/back-link";
+import { inputClass } from "@/lib/ui";
 
 export default function NuevoClientePage() {
   const router = useRouter();
@@ -32,27 +35,21 @@ export default function NuevoClientePage() {
     }
 
     const { id } = await res.json();
+    setLoading(false);
     router.push(`/clientes/${id}`);
   }
-
-  const inputClass =
-    "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/clientes" className="text-gray-400 text-lg">
-          ←
-        </Link>
+        <BackLink href="/clientes" label="Volver a clientes" />
         <h1 className="text-lg font-semibold text-gray-900">Nuevo cliente</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Nombre <span className="text-red-500">*</span>
-          </label>
+        <FormField label="Nombre" htmlFor="nombre" required>
           <input
+            id="nombre"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -61,57 +58,47 @@ export default function NuevoClientePage() {
             placeholder="Ferretería Central"
             className={inputClass}
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Teléfono / WhatsApp
-          </label>
+        <FormField label="Teléfono / WhatsApp" htmlFor="telefono">
           <input
+            id="telefono"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+54 9 11 1234-5678"
             className={inputClass}
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Dirección
-          </label>
+        <FormField label="Dirección" htmlFor="direccion">
           <input
+            id="direccion"
             type="text"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Av. Corrientes 1234"
             className={inputClass}
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Notas
-          </label>
+        <FormField label="Notas" htmlFor="notas">
           <textarea
+            id="notas"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Información adicional..."
             className={`${inputClass} resize-none`}
           />
-        </div>
+        </FormField>
 
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-            {error}
-          </p>
-        )}
+        <FormError error={error} />
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 transition-colors"
         >
           {loading ? "Guardando..." : "Crear cliente"}
         </button>

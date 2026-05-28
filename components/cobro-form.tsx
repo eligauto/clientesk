@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-const inputClass =
-  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+import { FormField } from "@/components/form-field";
+import { FormError } from "@/components/form-error";
+import { inputClass } from "@/lib/ui";
 
 export function CobroForm({ customerId }: { customerId: string }) {
   const router = useRouter();
@@ -50,6 +50,7 @@ export function CobroForm({ customerId }: { customerId: string }) {
     setAmount("");
     setNotes("");
     setDate(today);
+    setLoading(false);
     setOpen(false);
     router.refresh();
   }
@@ -58,7 +59,7 @@ export function CobroForm({ customerId }: { customerId: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center justify-center w-full border border-green-300 text-green-700 text-sm font-medium py-3 rounded-xl hover:bg-green-50 transition-colors"
+        className="flex items-center justify-center w-full border border-green-300 text-green-700 text-sm font-medium py-3 rounded-xl hover:bg-green-50 active:bg-green-100 transition-colors"
       >
         + Registrar cobro
       </button>
@@ -80,18 +81,30 @@ export function CobroForm({ customerId }: { customerId: string }) {
             setOpen(false);
             setError("");
           }}
-          className="text-gray-400 text-lg leading-none"
+          aria-label="Cerrar"
+          className="text-gray-400 hover:text-gray-600 active:text-gray-800 transition-colors p-2 -mr-2 -mt-1"
         >
-          ×
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Monto
-          </label>
+        <FormField label="Monto" htmlFor="cobro-amount" required>
           <input
+            id="cobro-amount"
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -102,12 +115,10 @@ export function CobroForm({ customerId }: { customerId: string }) {
             className={inputClass}
             autoFocus
           />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Método
-          </label>
+        </FormField>
+        <FormField label="Método" htmlFor="cobro-method">
           <select
+            id="cobro-method"
             value={method}
             onChange={(e) => setMethod(e.target.value)}
             className={inputClass}
@@ -116,45 +127,37 @@ export function CobroForm({ customerId }: { customerId: string }) {
             <option value="transferencia">Transferencia</option>
             <option value="cheque">Cheque</option>
           </select>
-        </div>
+        </FormField>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Fecha
-        </label>
+      <FormField label="Fecha" htmlFor="cobro-date">
         <input
+          id="cobro-date"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Descripción (opcional)
-        </label>
+      <FormField label="Descripción" htmlFor="cobro-notes" optional>
         <input
+          id="cobro-notes"
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Ej: Abono julio, pago cuota..."
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      {error && (
-        <p className="text-xs text-red-600 bg-red-50 rounded px-3 py-2">
-          {error}
-        </p>
-      )}
+      <FormError error={error} />
 
       <button
         type="submit"
         disabled={loading || !amount}
-        className="w-full bg-green-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-green-700 disabled:opacity-40 transition-colors"
+        className="w-full bg-green-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-40 transition-colors"
       >
         {loading ? "Registrando..." : "Confirmar cobro"}
       </button>

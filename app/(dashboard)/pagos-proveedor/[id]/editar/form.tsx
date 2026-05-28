@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-
-const inputClass =
-  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+import { FormField } from "@/components/form-field";
+import { FormError } from "@/components/form-error";
+import { BackLink } from "@/components/back-link";
+import { inputClass } from "@/lib/ui";
 
 interface Pago {
   id: string;
@@ -54,6 +54,7 @@ export function EditarPagoProveedorForm({ pago }: { pago: Pago }) {
       return;
     }
 
+    setLoading(false);
     router.push(`/proveedores/${pago.supplierId}`);
     router.refresh();
   }
@@ -61,21 +62,17 @@ export function EditarPagoProveedorForm({ pago }: { pago: Pago }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-8">
       <div className="flex items-center gap-3">
-        <Link
+        <BackLink
           href={`/proveedores/${pago.supplierId}`}
-          className="text-gray-400 text-lg"
-        >
-          ←
-        </Link>
+          label="Volver al proveedor"
+        />
         <h1 className="text-lg font-semibold text-gray-900">Editar pago</h1>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Monto
-          </label>
+        <FormField label="Monto" htmlFor="monto" required>
           <input
+            id="monto"
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -86,12 +83,10 @@ export function EditarPagoProveedorForm({ pago }: { pago: Pago }) {
             className={inputClass}
             autoFocus
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Método
-          </label>
+        </FormField>
+        <FormField label="Método" htmlFor="metodo">
           <select
+            id="metodo"
             value={method}
             onChange={(e) => setMethod(e.target.value)}
             className={inputClass}
@@ -100,45 +95,37 @@ export function EditarPagoProveedorForm({ pago }: { pago: Pago }) {
             <option value="transferencia">Transferencia</option>
             <option value="cheque">Cheque</option>
           </select>
-        </div>
+        </FormField>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Fecha
-        </label>
+      <FormField label="Fecha" htmlFor="fecha">
         <input
+          id="fecha"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Descripción (opcional)
-        </label>
+      <FormField label="Descripción" htmlFor="descripcion" optional>
         <input
+          id="descripcion"
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Ej: Pago cuota, abono julio..."
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
+      <FormError error={error} />
 
       <button
         type="submit"
         disabled={loading || !amount}
-        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition-colors"
       >
         {loading ? "Guardando..." : "Guardar cambios"}
       </button>

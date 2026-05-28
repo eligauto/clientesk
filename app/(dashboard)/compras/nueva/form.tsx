@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { FormField } from "@/components/form-field";
+import { FormError } from "@/components/form-error";
+import { BackLink } from "@/components/back-link";
 import { Combobox } from "@/components/combobox";
 import { fmt } from "@/lib/utils";
+import { inputClass } from "@/lib/ui";
 
 type Supplier = { id: string; name: string };
 type Product = {
@@ -31,9 +34,6 @@ const PRICE_FIELDS: Record<string, keyof Product> = {
   transferencia: "priceTransfer",
   contado: "priceCash",
 };
-
-const inputClass =
-  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
 export function NuevaCompraForm({
   suppliers,
@@ -130,6 +130,7 @@ export function NuevaCompraForm({
       return;
     }
 
+    setLoading(false);
     router.push(`/proveedores/${proveedorId}`);
     router.refresh();
   }
@@ -137,20 +138,14 @@ export function NuevaCompraForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-8">
       <div className="flex items-center gap-3">
-        <Link
+        <BackLink
           href={proveedorId ? `/proveedores/${proveedorId}` : "/proveedores"}
-          className="text-gray-400 text-lg"
-        >
-          ←
-        </Link>
+          label="Volver"
+        />
         <h1 className="text-lg font-semibold text-gray-900">Nueva compra</h1>
       </div>
 
-      {/* Proveedor */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Proveedor <span className="text-red-500">*</span>
-        </label>
+      <FormField label="Proveedor" htmlFor="proveedor" required>
         <Combobox
           options={suppliers.map((s) => ({ id: s.id, label: s.name }))}
           value={proveedorId}
@@ -158,13 +153,9 @@ export function NuevaCompraForm({
           placeholder="Buscar proveedor..."
           required
         />
-      </div>
+      </FormField>
 
-      {/* Producto */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Producto <span className="text-red-500">*</span>
-        </label>
+      <FormField label="Producto" htmlFor="producto" required>
         <Combobox
           onSearch={searchProductos}
           value={productoId}
@@ -172,15 +163,12 @@ export function NuevaCompraForm({
           placeholder="Escribí nombre o código..."
           required
         />
-      </div>
+      </FormField>
 
-      {/* Cantidad + tipo de precio */}
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Cantidad
-          </label>
+        <FormField label="Cantidad" htmlFor="cantidad">
           <input
+            id="cantidad"
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -189,12 +177,10 @@ export function NuevaCompraForm({
             required
             className={inputClass}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tipo de precio
-          </label>
+        </FormField>
+        <FormField label="Tipo de precio" htmlFor="tipo-precio">
           <select
+            id="tipo-precio"
             value={priceType}
             onChange={(e) => setPriceType(e.target.value)}
             className={inputClass}
@@ -205,15 +191,12 @@ export function NuevaCompraForm({
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
       </div>
 
-      {/* Precio unitario */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Precio unitario
-        </label>
+      <FormField label="Precio unitario" htmlFor="precio-unitario">
         <input
+          id="precio-unitario"
           type="number"
           value={unitPrice}
           onChange={(e) => setUnitPrice(e.target.value)}
@@ -223,9 +206,8 @@ export function NuevaCompraForm({
           placeholder="0.00"
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      {/* Total */}
       {total > 0 && (
         <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
           <span className="text-sm text-gray-600">Total a cargar</span>
@@ -235,12 +217,9 @@ export function NuevaCompraForm({
         </div>
       )}
 
-      {/* Comisión cueva */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Comisión cueva (%)
-        </label>
+      <FormField label="Comisión cueva (%)" htmlFor="comision">
         <input
+          id="comision"
           type="number"
           value={commissionPct}
           onChange={(e) => setCommissionPct(e.target.value)}
@@ -250,47 +229,37 @@ export function NuevaCompraForm({
           placeholder="0"
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      {/* Fecha */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Fecha
-        </label>
+      <FormField label="Fecha" htmlFor="fecha">
         <input
+          id="fecha"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      {/* Notas */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Notas (opcional)
-        </label>
+      <FormField label="Notas" htmlFor="notas" optional>
         <textarea
+          id="notas"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           className={`${inputClass} resize-none`}
         />
-      </div>
+      </FormField>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
+      <FormError error={error} />
 
       <button
         type="submit"
         disabled={
           loading || !proveedorId || !productoId || !unitPrice || qty <= 0
         }
-        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition-colors"
       >
         {loading ? "Registrando..." : "Registrar compra"}
       </button>

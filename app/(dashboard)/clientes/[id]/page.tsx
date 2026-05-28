@@ -8,6 +8,7 @@ import {
 } from "@/components/estado-cuenta-btn";
 import { CobroForm } from "@/components/cobro-form";
 import { CancelEntryBtn } from "@/components/cancel-entry-btn";
+import { RouteRefresher } from "@/components/route-refresher";
 import { fmt, fmtDate } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
 
@@ -93,6 +94,7 @@ export default async function ClienteDetallePage({
 
   return (
     <div>
+      <RouteRefresher />
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

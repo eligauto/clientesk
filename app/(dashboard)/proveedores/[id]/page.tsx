@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getTenantId } from "@/lib/tenant";
 import { PagoProveedorForm } from "@/components/pago-proveedor-form";
 import { CancelEntryBtn } from "@/components/cancel-entry-btn";
+import { RouteRefresher } from "@/components/route-refresher";
 import { fmt, fmtDate } from "@/lib/utils";
 
 const METHOD_LABEL: Record<string, string> = {
@@ -76,6 +77,7 @@ export default async function ProveedorDetallePage({
 
   return (
     <div>
+      <RouteRefresher />
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

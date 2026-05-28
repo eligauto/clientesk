@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { FormField } from "@/components/form-field";
+import { FormError } from "@/components/form-error";
+import { BackLink } from "@/components/back-link";
+import { fmt } from "@/lib/utils";
+import { inputClass } from "@/lib/ui";
 
 const PRICE_LABELS: Record<string, string> = {
   lista: "Lista",
@@ -10,9 +14,6 @@ const PRICE_LABELS: Record<string, string> = {
   transferencia: "Transferencia",
   contado: "Contado",
 };
-
-const inputClass =
-  "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
 interface Transaction {
   id: string;
@@ -66,6 +67,7 @@ export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
       return;
     }
 
+    setLoading(false);
     router.push(`/clientes/${transaction.customerId}`);
     router.refresh();
   }
@@ -73,34 +75,28 @@ export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-8">
       <div className="flex items-center gap-3">
-        <Link
+        <BackLink
           href={`/clientes/${transaction.customerId}`}
-          className="text-gray-400 text-lg"
-        >
-          ←
-        </Link>
+          label="Volver al cliente"
+        />
         <h1 className="text-lg font-semibold text-gray-900">Editar venta</h1>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Producto
-        </label>
+      <FormField label="Producto" htmlFor="producto">
         <input
+          id="producto"
           type="text"
           value={productName}
           onChange={(e) => setProductName(e.target.value)}
           required
           className={inputClass}
         />
-      </div>
+      </FormField>
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Cantidad
-          </label>
+        <FormField label="Cantidad" htmlFor="cantidad">
           <input
+            id="cantidad"
             type="number"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -109,12 +105,10 @@ export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
             required
             className={inputClass}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tipo de precio
-          </label>
+        </FormField>
+        <FormField label="Tipo de precio" htmlFor="tipo-precio">
           <select
+            id="tipo-precio"
             value={priceType}
             onChange={(e) => setPriceType(e.target.value)}
             className={inputClass}
@@ -125,14 +119,12 @@ export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Precio unitario
-        </label>
+      <FormField label="Precio unitario" htmlFor="precio-unitario">
         <input
+          id="precio-unitario"
           type="number"
           value={unitPrice}
           onChange={(e) => setUnitPrice(e.target.value)}
@@ -142,55 +134,44 @@ export function EditarVentaForm({ transaction }: { transaction: Transaction }) {
           placeholder="0.00"
           className={inputClass}
         />
-      </div>
+      </FormField>
 
       {total > 0 && (
         <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between items-center">
           <span className="text-sm text-gray-600">Total</span>
           <span className="text-base font-semibold text-gray-900">
-            {total.toLocaleString("es-AR", {
-              style: "currency",
-              currency: "ARS",
-            })}
+            {fmt(total)}
           </span>
         </div>
       )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Fecha
-        </label>
+      <FormField label="Fecha" htmlFor="fecha">
         <input
+          id="fecha"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
           className={inputClass}
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Notas (opcional)
-        </label>
+      <FormField label="Notas" htmlFor="notas" optional>
         <textarea
+          id="notas"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           className={`${inputClass} resize-none`}
         />
-      </div>
+      </FormField>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-          {error}
-        </p>
-      )}
+      <FormError error={error} />
 
       <button
         type="submit"
         disabled={loading || !productName.trim() || qty <= 0 || price <= 0}
-        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+        className="w-full bg-indigo-600 text-white rounded-xl py-3.5 text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition-colors"
       >
         {loading ? "Guardando..." : "Guardar cambios"}
       </button>

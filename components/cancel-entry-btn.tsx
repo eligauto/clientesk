@@ -33,7 +33,7 @@ export function CancelEntryBtn({
     return (
       <button
         onClick={() => setConfirming(true)}
-        className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+        className="text-xs text-red-500 hover:text-red-700 active:text-red-800 font-medium transition-colors py-2 px-2 -my-2 -mx-2"
       >
         {label}
       </button>
@@ -41,18 +41,18 @@ export function CancelEntryBtn({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1">
       <span className="text-xs text-gray-500">¿Anular?</span>
       <button
         onClick={handleCancel}
         disabled={loading}
-        className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+        className="text-xs font-medium text-red-600 hover:text-red-800 active:text-red-900 disabled:opacity-50 py-2 px-2 -my-2"
       >
         {loading ? "..." : "Sí"}
       </button>
       <button
         onClick={() => setConfirming(false)}
-        className="text-xs text-gray-400 hover:text-gray-600"
+        className="text-xs text-gray-400 hover:text-gray-600 active:text-gray-800 py-2 px-2 -my-2"
       >
         No
       </button>
