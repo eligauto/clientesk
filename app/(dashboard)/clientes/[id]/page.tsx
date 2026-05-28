@@ -8,7 +8,6 @@ import {
 } from "@/components/estado-cuenta-btn";
 import { CobroForm } from "@/components/cobro-form";
 import { CancelEntryBtn } from "@/components/cancel-entry-btn";
-import { RouteRefresher } from "@/components/route-refresher";
 import { fmt, fmtDate } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
 
@@ -94,12 +93,15 @@ export default async function ClienteDetallePage({
 
   return (
     <div>
-      <RouteRefresher />
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <Link href="/clientes" className="text-xs text-gray-400 mb-1 block">
-            ← Clientes
+          <Link
+            href="/clientes"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 font-medium mb-1 -ml-0.5 py-0.5 pr-1"
+          >
+            <span className="text-base leading-none">‹</span>
+            Clientes
           </Link>
           <h1 className="text-xl font-semibold text-gray-900">
             {customer.name}

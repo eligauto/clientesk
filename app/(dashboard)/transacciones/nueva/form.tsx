@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { FormField } from "@/components/form-field";
 import { FormError } from "@/components/form-error";
 import { BackLink } from "@/components/back-link";
 import { Combobox } from "@/components/combobox";
 import { fmt } from "@/lib/utils";
 import { inputClass } from "@/lib/ui";
+import { crearTransaccion } from "./actions";
 
 type Customer = { id: string; name: string };
 
@@ -25,7 +25,6 @@ export function NuevaVentaForm({
   customers: Customer[];
   defaultClienteId?: string;
 }) {
-  const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
 
   const [clienteId, setClienteId] = useState(defaultClienteId ?? "");
@@ -51,30 +50,20 @@ export function NuevaVentaForm({
     setLoading(true);
     setError("");
 
-    const res = await fetch("/api/transacciones", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: clienteId,
-        productName: productoName.trim(),
-        quantity: qty,
-        priceType,
-        unitPrice: price,
-        notes: notes || undefined,
-        date,
-      }),
+    const result = await crearTransaccion({
+      customerId: clienteId,
+      productName: productoName.trim(),
+      quantity: qty,
+      priceType,
+      unitPrice: price,
+      notes: notes || undefined,
+      date,
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Error al registrar la venta");
+    if (result?.error) {
+      setError(result.error);
       setLoading(false);
-      return;
     }
-
-    setLoading(false);
-    router.push(`/clientes/${clienteId}`);
-    router.refresh();
   }
 
   return (
