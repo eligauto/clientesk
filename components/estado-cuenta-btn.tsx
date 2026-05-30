@@ -270,19 +270,19 @@ export function EstadoCuentaBtn({
             }}
           >
             <colgroup>
-              <col style={{ width: 72 }} />
+              <col style={{ width: 76 }} />
               <col style={{ width: "auto" }} />
-              <col style={{ width: 88 }} />
-              <col style={{ width: 88 }} />
-              <col style={{ width: 88 }} />
+              <col style={{ width: 112 }} />
+              <col style={{ width: 112 }} />
+              <col style={{ width: 112 }} />
             </colgroup>
             <thead>
               <tr style={{ background: "#f3f4f6" }}>
                 {[
                   { label: "Fecha", align: "left" },
                   { label: "Descripción", align: "left" },
-                  { label: "Debe", align: "right" },
-                  { label: "Haber", align: "right" },
+                  { label: "Pedido", align: "right" },
+                  { label: "A Cuenta", align: "right" },
                   { label: "Saldo", align: "right" },
                 ].map(({ label, align }) => (
                   <th
@@ -372,24 +372,8 @@ export function EstadoCuentaBtn({
                 >
                   Total
                 </td>
-                <td
-                  style={{
-                    padding: "10px 10px",
-                    textAlign: "right",
-                    color: "#111827",
-                  }}
-                >
-                  {fmt(totalVendido)}
-                </td>
-                <td
-                  style={{
-                    padding: "10px 10px",
-                    textAlign: "right",
-                    color: "#059669",
-                  }}
-                >
-                  {fmt(totalCobrado)}
-                </td>
+                <td style={{ padding: "10px 10px" }} />
+                <td style={{ padding: "10px 10px" }} />
                 <td
                   style={{
                     padding: "10px 10px",
