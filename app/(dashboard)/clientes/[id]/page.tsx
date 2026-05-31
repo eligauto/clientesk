@@ -10,6 +10,7 @@ import { MovimientoForm } from "@/components/movimiento-form";
 import { fmt } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
 import { HistorialCliente, type HistorialEntry } from "./historial";
+import { CuotasSection } from "./cuotas-section";
 
 const METHOD_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
@@ -24,7 +25,7 @@ export default async function ClienteDetallePage({
 }) {
   const tenantId = await getTenantId();
 
-  const [customer, transactions, cobros] = await Promise.all([
+  const [customer, transactions, cobros, planes] = await Promise.all([
     prisma.customer.findFirst({ where: { id: params.id, tenantId } }),
     prisma.transaction.findMany({
       where: { customerId: params.id, tenantId },
@@ -34,6 +35,11 @@ export default async function ClienteDetallePage({
     prisma.accountPayment.findMany({
       where: { customerId: params.id, tenantId },
       orderBy: { date: "asc" },
+    }),
+    prisma.paymentPlan.findMany({
+      where: { customerId: params.id, tenantId },
+      include: { installments: { orderBy: { installmentNumber: "asc" } } },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -170,6 +176,28 @@ export default async function ClienteDetallePage({
           totalVendido={totalVendido}
           totalCobrado={totalCobrado}
           saldo={saldo}
+        />
+      </div>
+
+      {/* Cuotas */}
+      <div className="mb-6">
+        <CuotasSection
+          customerId={customer.id}
+          plans={planes.map((p) => ({
+            id: p.id,
+            description: p.description,
+            totalAmount: Number(p.totalAmount),
+            installmentCount: p.installmentCount,
+            frequency: p.frequency,
+            status: p.status,
+            installments: p.installments.map((i) => ({
+              id: i.id,
+              installmentNumber: i.installmentNumber,
+              dueDate: i.dueDate.toISOString(),
+              expectedAmount: Number(i.expectedAmount),
+              status: i.status,
+            })),
+          }))}
         />
       </div>
 

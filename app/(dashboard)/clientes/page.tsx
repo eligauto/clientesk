@@ -5,6 +5,7 @@ import { SaldoBadge } from "@/components/saldo-badge";
 import { SearchInput } from "@/components/search-input";
 import { fmt } from "@/lib/utils";
 import { Suspense } from "react";
+import { CuotasVencidasBadge } from "@/components/cuotas-vencidas-badge";
 
 export default async function ClientesPage({
   searchParams,
@@ -14,7 +15,10 @@ export default async function ClientesPage({
   const tenantId = await getTenantId();
   const q = searchParams.q ?? "";
 
-  const [customers, deudaAgg, aFavorAgg] = await Promise.all([
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [customers, deudaAgg, aFavorAgg, cuotasVencidas] = await Promise.all([
     prisma.customer.findMany({
       where: {
         tenantId,
@@ -35,12 +39,25 @@ export default async function ClientesPage({
       _sum: { balanceDue: true },
       _count: true,
     }),
+    // Cuotas vencidas: count + monto total
+    prisma.paymentPlanInstallment.aggregate({
+      where: {
+        tenantId,
+        status: "pending",
+        dueDate: { lt: today },
+        plan: { status: "active" },
+      },
+      _count: true,
+      _sum: { expectedAmount: true },
+    }),
   ]);
 
   const deudaTotal = Number(deudaAgg._sum.balanceDue ?? 0);
   const deudores = deudaAgg._count;
-  const aFavorTotal = -Number(aFavorAgg._sum.balanceDue ?? 0); // a positivo
+  const aFavorTotal = -Number(aFavorAgg._sum.balanceDue ?? 0);
   const conSaldoAFavor = aFavorAgg._count;
+  const cuotasVencidasCount = cuotasVencidas._count;
+  const cuotasVencidasMonto = Number(cuotasVencidas._sum.expectedAmount ?? 0);
 
   return (
     <div>
@@ -84,6 +101,13 @@ export default async function ClientesPage({
           </div>
         )}
       </div>
+
+      {cuotasVencidasCount > 0 && (
+        <CuotasVencidasBadge
+          count={cuotasVencidasCount}
+          monto={cuotasVencidasMonto}
+        />
+      )}
 
       <div className="mb-4">
         <Suspense>
