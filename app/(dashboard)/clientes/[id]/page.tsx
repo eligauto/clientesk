@@ -6,7 +6,7 @@ import {
   EstadoCuentaBtn,
   type LedgerEntry,
 } from "@/components/estado-cuenta-btn";
-import { CobroForm } from "@/components/cobro-form";
+import { MovimientoForm } from "@/components/movimiento-form";
 import { CancelEntryBtn } from "@/components/cancel-entry-btn";
 import { fmt, fmtDate } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
@@ -152,13 +152,7 @@ export default async function ClienteDetallePage({
 
       {/* Actions */}
       <div className="space-y-2 mb-6">
-        <Link
-          href={`/transacciones/nueva?clienteId=${customer.id}`}
-          className="flex items-center justify-center w-full bg-indigo-600 text-white text-sm font-medium py-3 rounded-xl"
-        >
-          + Nueva venta
-        </Link>
-        <CobroForm customerId={customer.id} />
+        <MovimientoForm customerId={customer.id} />
         <EstadoCuentaBtn
           customerName={customer.name}
           entries={ledgerEntries}
