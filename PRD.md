@@ -1,6 +1,6 @@
 # PRD — SaaS de gestión de clientes y deudas
 
-**Versión:** 0.2  
+**Versión:** 0.3  
 **Estado:** Borrador  
 **Última actualización:** Mayo 2026
 
@@ -132,7 +132,23 @@ organizations ──< users
 
 > **Cambio v0.2:** Los pagos ya no están ligados a una transacción/compra específica sino a la cuenta del cliente o proveedor. El saldo surge del total de ventas/compras menos el total de cobros/pagos acumulados. Esto refleja el modelo real del negocio: el cliente paga sobre su deuda total, no sobre ítems individuales.
 
-### 5.2 Tablas principales
+### 5.2 Tablas principales — índice
+
+| Tabla                       | Propósito                                                  |
+| --------------------------- | ---------------------------------------------------------- |
+| `organizations`             | Multi-tenant: cada tenant es una organización              |
+| `users`                     | Usuarios del sistema (un usuario por tenant en fase 1)     |
+| `customers`                 | Clientes (ferreterías / talleres)                          |
+| `suppliers`                 | Proveedores                                                |
+| `products`                  | Catálogo de productos con múltiples precios                |
+| `transactions`              | Ventas a clientes                                          |
+| `account_payments`          | Cobros libres sobre la cuenta del cliente                  |
+| `purchases`                 | Compras a proveedores                                      |
+| `supplier_payments`         | Pagos libres sobre la cuenta del proveedor                 |
+| `payment_plans`             | Plan de cuotas acordado con un cliente (**nuevo en v0.3**) |
+| `payment_plan_installments` | Cuotas individuales de un plan (**nuevo en v0.3**)         |
+
+### 5.3 Tablas principales — detalle
 
 #### `organizations`
 
@@ -259,7 +275,40 @@ status       ENUM('active', 'cancelled') DEFAULT 'active'
 created_at   TIMESTAMP
 ```
 
-### 5.3 Notas de consistencia
+#### `payment_plans` — planes de cuotas (**nuevo en v0.3**)
+
+```sql
+id               UUID PK
+tenant_id        UUID FK → organizations.id
+customer_id      UUID FK → customers.id
+transaction_id   UUID FK → transactions.id (nullable) -- venta que origina el plan
+description      TEXT NOT NULL                        -- ej. "Taladro Bosch 6 cuotas"
+total_amount     NUMERIC(12,2)
+installment_count INT                                 -- cantidad de cuotas
+frequency        ENUM('semanal', 'quincenal', 'mensual')
+first_due_date   DATE                                 -- fecha de la primera cuota
+status           ENUM('active', 'completed', 'cancelled') DEFAULT 'active'
+created_at       TIMESTAMP
+```
+
+#### `payment_plan_installments` — cuotas individuales (**nuevo en v0.3**)
+
+```sql
+id                 UUID PK
+tenant_id          UUID FK → organizations.id
+plan_id            UUID FK → payment_plans.id
+customer_id        UUID FK → customers.id             -- redundante, facilita queries globales
+installment_number INT                                -- 1, 2, 3...
+due_date           DATE                               -- fecha de vencimiento
+expected_amount    NUMERIC(12,2)
+status             ENUM('pending', 'paid', 'cancelled') DEFAULT 'pending'
+created_at         TIMESTAMP
+```
+
+> **`overdue` se computa en query**, no se persiste: `status = 'pending' AND due_date < CURRENT_DATE`.
+> Las cuotas son una capa de planificación; no reemplazan ni afectan el libro diario ni el `balance_due`.
+
+### 5.4 Notas de consistencia
 
 - `balance_due` en `customers` y `suppliers` sigue siendo un campo desnormalizado pero ahora se calcula como:  
   `balance_due = SUM(transactions.total_amount WHERE status='active') - SUM(account_payments.amount WHERE status='active')`  
@@ -353,6 +402,50 @@ Diferencias propias del módulo de proveedores:
 - Los precios son editables en cualquier momento
 - El precio histórico de cada venta/compra queda guardado en la transacción
 
+### 6.5 Módulo de cuotas — nuevo en v0.3
+
+El módulo de cuotas es una **capa de planificación** que se superpone al libro diario sin modificarlo. Permite al vendedor acordar con un cliente un plan de pagos en cuotas, generar automáticamente las fechas de vencimiento, y ver de un vistazo qué cuotas están vencidas.
+
+> **Separación de responsabilidades:** las cuotas no afectan el `balance_due`. El cobro real se sigue registrando como `account_payment` en el libro diario. Las cuotas solo rastrean si el plan se está cumpliendo o no.
+
+**Crear plan de cuotas** (desde detalle de cliente)
+
+1. Ingresar: descripción, monto total, cantidad de cuotas, frecuencia (semanal / quincenal / mensual), fecha primera cuota
+2. El sistema auto-genera las filas de cuotas con sus fechas y montos iguales
+3. El plan queda asociado al cliente y opcionalmente a una venta específica
+
+**Estado de una cuota** (computado en query):
+
+- `pending` + `due_date >= hoy` → Pendiente (gris)
+- `pending` + `due_date < hoy` → Vencida (rojo) — computed, no persiste
+- `paid` → Pagada (verde)
+- `cancelled` → Anulada
+
+**Marcar cuota como pagada**
+
+- Tap en la cuota → "Marcar pagada" → `status = paid`
+- No crea automáticamente un `account_payment`; el cobro real se registra aparte en el libro diario
+
+**Cancelar plan**
+
+- Marca el plan como `cancelled` y cancela todas las cuotas `pending`
+
+**Vista global de cuotas vencidas** (`/cuotas`)
+
+- Lista todas las cuotas con `status = pending` y `due_date < hoy` de todos los clientes
+- Ordenada por días de atraso (más vencida primero)
+- Muestra: cliente, descripción del plan, N° de cuota, monto, días vencida
+- Tap en una fila → detalle del cliente
+
+**Widget en lista de clientes** (`/clientes`)
+
+- Banda superior: "X cuotas vencidas · $Y total" con link a `/cuotas`
+- Solo se muestra si hay cuotas vencidas
+
+**Badge en cada cliente**
+
+- Número de cuotas vencidas junto al nombre del cliente en la lista
+
 ---
 
 ## 7. UX / UI
@@ -367,7 +460,7 @@ Diferencias propias del módulo de proveedores:
 ### 7.2 Pantallas principales
 
 | Pantalla               | Ruta                   |
-| ---------------------- | ---------------------- |
+| ---------------------- | ---------------------- | --------------- |
 | Login                  | `/login`               |
 | Home / dashboard       | `/`                    |
 | Lista de clientes      | `/clientes`            |
@@ -378,6 +471,7 @@ Diferencias propias del módulo de proveedores:
 | Detalle de proveedor   | `/proveedores/[id]`    |
 | Nueva compra           | `/compras/nueva`       |
 | Productos              | `/productos`           |
+| Cuotas vencidas global | `/cuotas`              | ← nuevo en v0.3 |
 
 ### 7.3 PWA
 
@@ -425,6 +519,14 @@ PATCH  /api/pagos-proveedor/:id/cancelar
 GET    /api/productos
 POST   /api/productos
 PUT    /api/productos/:id
+
+-- Cuotas (v0.3)
+GET    /api/cuotas/vencidas                        -- todas las cuotas overdue del tenant
+POST   /api/planes-cuotas                          -- crear plan + generar cuotas automáticamente
+GET    /api/planes-cuotas/:planId                  -- detalle del plan con cuotas
+PATCH  /api/planes-cuotas/:planId/cancelar         -- cancelar plan y cuotas pending
+PATCH  /api/cuotas/:installmentId/pagar            -- marcar cuota como pagada
+PATCH  /api/cuotas/:installmentId/cancelar         -- anular cuota individual
 ```
 
 Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con formato `{ error: string, code: string }`.
@@ -508,6 +610,30 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 - [ ] Botón "Anular" en cada fila del historial con confirmación; muestra badge "Anulado" en filas canceladas
 - [ ] Fix UI imagen PNG: descripción con `text-overflow: ellipsis` o `max-width` fijo, columnas numéricas con ancho mínimo garantizado
 
+### Fase 3.6 — v0.3: Control de cuotas ✅ En progreso
+
+**Modelo de datos**
+
+- [x] Migración Prisma: agregar enums `InstallmentFrequency`, `InstallmentStatus`, modelos `payment_plans` y `payment_plan_installments`
+
+**Backend**
+
+- [x] `POST /api/planes-cuotas` — crear plan + auto-generar cuotas
+- [x] `GET /api/planes-cuotas/:planId` — detalle del plan con cuotas
+- [x] `PATCH /api/planes-cuotas/:planId/cancelar` — cancelar plan y cuotas pending
+- [x] `PATCH /api/cuotas/:id/pagar` — marcar cuota pagada; auto-completa plan si todas pagadas
+- [x] `PATCH /api/cuotas/:id/cancelar` — anular cuota individual
+- [x] `GET /api/cuotas/vencidas` — cuotas overdue globales del tenant
+
+**Frontend**
+
+- [x] Sección "Cuotas" en detalle de cliente — lista de planes con cuotas y estado visual
+- [x] Formulario inline "Nuevo plan" desde detalle de cliente
+- [x] Badge de cuotas vencidas en lista de clientes
+- [x] Widget de resumen en `/clientes` (total vencido + link a `/cuotas`)
+- [x] Página `/cuotas` — vista global overdue, ordenada por días de atraso
+- [x] Entrada "Cuotas" en la navegación (tab bar móvil + header desktop)
+
 ### Fase 4 — Multi-tenant real (futuro)
 
 - [ ] Onboarding self-service
@@ -518,13 +644,15 @@ Todos los endpoints validan `tenant_id` del JWT. Respuestas en JSON. Errores con
 
 ## 11. Decisiones técnicas registradas
 
-| Decisión                                | Alternativa descartada            | Razón                                                  |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------ |
-| Multi-tenant por `tenant_id` en columna | Schema separado por tenant        | Más simple para MVP, migrable a futuro                 |
-| `balance_due` desnormalizado            | Calculado en query siempre        | Performance en listas con muchos clientes              |
-| Precio histórico en `unit_price`        | Referencia al precio del producto | Los precios cambian; el precio cobrado no debe cambiar |
-| Generación de imagen en cliente         | Servicio de render server-side    | Sin infraestructura extra, funciona offline            |
-| Next.js monorepo                        | Backend separado (Express)        | Suficiente para MVP, split fácil si escala             |
+| Decisión                                | Alternativa descartada            | Razón                                                                        |
+| --------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| Multi-tenant por `tenant_id` en columna | Schema separado por tenant        | Más simple para MVP, migrable a futuro                                       |
+| `balance_due` desnormalizado            | Calculado en query siempre        | Performance en listas con muchos clientes                                    |
+| Precio histórico en `unit_price`        | Referencia al precio del producto | Los precios cambian; el precio cobrado no debe cambiar                       |
+| Generación de imagen en cliente         | Servicio de render server-side    | Sin infraestructura extra, funciona offline                                  |
+| Next.js monorepo                        | Backend separado (Express)        | Suficiente para MVP, split fácil si escala                                   |
+| Cuotas como capa de planificación       | Cuotas ligadas al `balance_due`   | El vendedor maneja el cobro real aparte; las cuotas solo rastrean el acuerdo |
+| `overdue` computado en query            | Campo `overdue` persistido        | Evita jobs de actualización; la lógica es trivial (`due_date < NOW()`)       |
 
 ---
 
