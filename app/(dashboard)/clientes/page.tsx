@@ -14,7 +14,7 @@ export default async function ClientesPage({
   const tenantId = await getTenantId();
   const q = searchParams.q ?? "";
 
-  const [customers, deudaAgg] = await Promise.all([
+  const [customers, deudaAgg, aFavorAgg] = await Promise.all([
     prisma.customer.findMany({
       where: {
         tenantId,
@@ -29,10 +29,18 @@ export default async function ClientesPage({
       _sum: { balanceDue: true },
       _count: true,
     }),
+    // Saldo a favor: suma de saldos negativos (clientes con saldo a cuenta)
+    prisma.customer.aggregate({
+      where: { tenantId, balanceDue: { lt: 0 } },
+      _sum: { balanceDue: true },
+      _count: true,
+    }),
   ]);
 
   const deudaTotal = Number(deudaAgg._sum.balanceDue ?? 0);
   const deudores = deudaAgg._count;
+  const aFavorTotal = -Number(aFavorAgg._sum.balanceDue ?? 0); // a positivo
+  const conSaldoAFavor = aFavorAgg._count;
 
   return (
     <div>
@@ -46,20 +54,35 @@ export default async function ClientesPage({
         </Link>
       </div>
 
-      <div className="bg-white rounded-xl p-4 border border-gray-100 mb-4 flex items-center justify-between">
-        <div>
+      <div
+        className={`mb-4 grid gap-3 ${conSaldoAFavor > 0 ? "grid-cols-2" : "grid-cols-1"}`}
+      >
+        <div className="bg-white rounded-xl p-4 border border-gray-100">
           <p className="text-xs text-gray-400">Deuda total</p>
+          <p
+            className={`text-xl font-semibold mt-1 ${
+              deudaTotal > 0 ? "text-amber-600" : "text-green-600"
+            }`}
+          >
+            {fmt(deudaTotal)}
+          </p>
           <p className="text-xs text-gray-400 mt-0.5">
             {deudores} {deudores === 1 ? "cliente debe" : "clientes deben"}
           </p>
         </div>
-        <p
-          className={`text-xl font-semibold ${
-            deudaTotal > 0 ? "text-amber-600" : "text-green-600"
-          }`}
-        >
-          {fmt(deudaTotal)}
-        </p>
+
+        {conSaldoAFavor > 0 && (
+          <div className="bg-white rounded-xl p-4 border border-gray-100">
+            <p className="text-xs text-gray-400">A favor</p>
+            <p className="text-xl font-semibold mt-1 text-sky-600">
+              {fmt(aFavorTotal)}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {conSaldoAFavor}{" "}
+              {conSaldoAFavor === 1 ? "cliente a cuenta" : "clientes a cuenta"}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="mb-4">
