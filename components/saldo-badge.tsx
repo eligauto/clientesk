@@ -3,7 +3,14 @@ import { fmt } from "@/lib/utils";
 const HIGH_THRESHOLD = 50_000;
 
 export function SaldoBadge({ amount }: { amount: number }) {
-  if (amount <= 0) {
+  if (amount < -0.005) {
+    return (
+      <span className="text-xs font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">
+        A favor {fmt(-amount)}
+      </span>
+    );
+  }
+  if (amount <= 0.005) {
     return (
       <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
         Saldado
