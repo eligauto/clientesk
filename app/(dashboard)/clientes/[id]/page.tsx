@@ -7,9 +7,9 @@ import {
   type LedgerEntry,
 } from "@/components/estado-cuenta-btn";
 import { MovimientoForm } from "@/components/movimiento-form";
-import { CancelEntryBtn } from "@/components/cancel-entry-btn";
-import { fmt, fmtDate } from "@/lib/utils";
+import { fmt } from "@/lib/utils";
 import { DeleteClienteButton } from "./delete-cliente";
+import { HistorialCliente, type HistorialEntry } from "./historial";
 
 const METHOD_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
@@ -91,6 +91,17 @@ export default async function ClienteDetallePage({
     status: h.status,
   }));
 
+  // Entradas para el historial colapsable (fecha serializada a ISO)
+  const historialEntries: HistorialEntry[] = history.map((h) => ({
+    kind: h.kind,
+    id: h.id,
+    date: h.date.toISOString(),
+    description: h.description,
+    amount: h.amount,
+    status: h.status,
+    extra: h.extra,
+  }));
+
   return (
     <div>
       {/* Header */}
@@ -167,85 +178,7 @@ export default async function ClienteDetallePage({
         Historial ({history.length})
       </h2>
 
-      {history.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-10">
-          Sin movimientos registrados
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {history.map((entry) => {
-            const cancelled = entry.status === "cancelled";
-            const editHref =
-              entry.kind === "venta"
-                ? `/transacciones/${entry.id}/editar`
-                : `/cobros/${entry.id}/editar`;
-            const cancelEndpoint =
-              entry.kind === "venta"
-                ? `/api/transacciones/${entry.id}/cancelar`
-                : `/api/cobros/${entry.id}/cancelar`;
-
-            return (
-              <li
-                key={`${entry.kind}-${entry.id}`}
-                className={`bg-white rounded-xl p-4 border transition-colors ${
-                  cancelled ? "border-gray-100 opacity-50" : "border-gray-100"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                          entry.kind === "venta"
-                            ? "bg-indigo-50 text-indigo-600"
-                            : "bg-green-50 text-green-700"
-                        }`}
-                      >
-                        {entry.kind === "venta" ? "Venta" : "Cobro"}
-                      </span>
-                      {cancelled && (
-                        <span className="text-xs text-red-400 font-medium">
-                          Anulado
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium text-gray-900 truncate mt-1">
-                      {entry.description}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(entry.date)}
-                      {entry.extra ? ` · ${entry.extra}` : ""}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p
-                      className={`text-sm font-semibold ${
-                        entry.kind === "venta"
-                          ? "text-gray-900"
-                          : "text-green-700"
-                      }`}
-                    >
-                      {entry.kind === "cobro" ? "+" : ""}
-                      {fmt(entry.amount)}
-                    </p>
-                    {!cancelled && (
-                      <div className="flex items-center gap-2 mt-1 justify-end">
-                        <Link
-                          href={editHref}
-                          className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
-                        >
-                          Editar
-                        </Link>
-                        <CancelEntryBtn endpoint={cancelEndpoint} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <HistorialCliente entries={historialEntries} />
 
       {/* Danger zone */}
       <div className="mt-8 pt-6 border-t border-gray-100">

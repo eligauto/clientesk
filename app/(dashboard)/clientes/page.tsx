@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getTenantId } from "@/lib/tenant";
 import { SaldoBadge } from "@/components/saldo-badge";
 import { SearchInput } from "@/components/search-input";
+import { fmt } from "@/lib/utils";
 import { Suspense } from "react";
 
 export default async function ClientesPage({
@@ -13,14 +14,25 @@ export default async function ClientesPage({
   const tenantId = await getTenantId();
   const q = searchParams.q ?? "";
 
-  const customers = await prisma.customer.findMany({
-    where: {
-      tenantId,
-      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
-    },
-    orderBy: { balanceDue: "desc" },
-    include: { _count: { select: { transactions: true } } },
-  });
+  const [customers, deudaAgg] = await Promise.all([
+    prisma.customer.findMany({
+      where: {
+        tenantId,
+        ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+      },
+      orderBy: { balanceDue: "desc" },
+      include: { _count: { select: { transactions: true } } },
+    }),
+    // Deuda total: suma de saldos positivos de TODOS los clientes (no filtra por q)
+    prisma.customer.aggregate({
+      where: { tenantId, balanceDue: { gt: 0 } },
+      _sum: { balanceDue: true },
+      _count: true,
+    }),
+  ]);
+
+  const deudaTotal = Number(deudaAgg._sum.balanceDue ?? 0);
+  const deudores = deudaAgg._count;
 
   return (
     <div>
@@ -32,6 +44,22 @@ export default async function ClientesPage({
         >
           + Nuevo
         </Link>
+      </div>
+
+      <div className="bg-white rounded-xl p-4 border border-gray-100 mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-gray-400">Deuda total</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {deudores} {deudores === 1 ? "cliente debe" : "clientes deben"}
+          </p>
+        </div>
+        <p
+          className={`text-xl font-semibold ${
+            deudaTotal > 0 ? "text-amber-600" : "text-green-600"
+          }`}
+        >
+          {fmt(deudaTotal)}
+        </p>
       </div>
 
       <div className="mb-4">
