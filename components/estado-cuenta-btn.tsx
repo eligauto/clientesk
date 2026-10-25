@@ -25,8 +25,6 @@ export type LedgerEntry =
 interface Props {
   customerName: string;
   entries: LedgerEntry[];
-  totalVendido: number;
-  totalCobrado: number;
   saldo: number;
 }
 
@@ -57,8 +55,6 @@ function monthKey(date: Date): string {
 export function EstadoCuentaBtn({
   customerName,
   entries,
-  totalVendido,
-  totalCobrado,
   saldo,
 }: Props) {
   const resumenRef = useRef<HTMLDivElement>(null);
@@ -229,8 +225,6 @@ export function EstadoCuentaBtn({
           <StatementSheet
             customerName={customerName}
             logoBase64={logoBase64}
-            totalVendido={totalVendido}
-            totalCobrado={totalCobrado}
             saldo={saldo}
             rows={resumenRows}
             caption={resumenCaption}
@@ -240,8 +234,6 @@ export function EstadoCuentaBtn({
           <StatementSheet
             customerName={customerName}
             logoBase64={logoBase64}
-            totalVendido={totalVendido}
-            totalCobrado={totalCobrado}
             saldo={saldo}
             rows={detalleRows}
           />
@@ -255,16 +247,12 @@ export function EstadoCuentaBtn({
 function StatementSheet({
   customerName,
   logoBase64,
-  totalVendido,
-  totalCobrado,
   saldo,
   rows,
   caption,
 }: {
   customerName: string;
   logoBase64: string | null;
-  totalVendido: number;
-  totalCobrado: number;
   saldo: number;
   rows: DisplayRow[];
   caption?: string;
@@ -326,8 +314,6 @@ function StatementSheet({
       {/* Summary boxes */}
       <div style={{ display: "flex", gap: 12, marginBottom: caption ? 12 : 24 }}>
         {[
-          { label: "Total vendido", value: fmt(totalVendido), color: "#111827" },
-          { label: "Total cobrado", value: fmt(totalCobrado), color: "#059669" },
           {
             label: "Saldo pendiente",
             value: fmt(saldo),

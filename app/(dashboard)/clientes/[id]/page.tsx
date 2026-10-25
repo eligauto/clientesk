@@ -173,8 +173,6 @@ export default async function ClienteDetallePage({
         <EstadoCuentaBtn
           customerName={customer.name}
           entries={ledgerEntries}
-          totalVendido={totalVendido}
-          totalCobrado={totalCobrado}
           saldo={saldo}
         />
       </div>
