@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcSupplierBalance } from "@/lib/balances";
 import { PriceType } from "@prisma/client";
 
 export const POST = withTenant(async (req, tenantId) => {
@@ -55,25 +56,7 @@ export const POST = withTenant(async (req, tenantId) => {
       },
     });
 
-    const [purchaseSum, paySum] = await Promise.all([
-      tx.purchase.aggregate({
-        where: { supplierId, tenantId, status: "active" },
-        _sum: { totalAmount: true },
-      }),
-      tx.supplierPayment.aggregate({
-        where: { supplierId, tenantId, status: "active" },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.supplier.update({
-      where: { id: supplierId },
-      data: {
-        balanceDue:
-          Number(purchaseSum._sum.totalAmount ?? 0) -
-          Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcSupplierBalance(tx, supplierId, tenantId);
 
     return p;
   });

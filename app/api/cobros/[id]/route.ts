@@ -1,32 +1,33 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcCustomerBalance } from "@/lib/balances";
 import { PaymentMethod } from "@prisma/client";
 
 type Ctx = { params: { id: string } };
 
 export async function GET(_req: Request, { params }: Ctx) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const cobro = await prisma.accountPayment.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
     include: { customer: { select: { id: true, name: true } } },
   });
-  if (!cobro) return NOT_FOUND;
+  if (!cobro) return notFound();
 
   return NextResponse.json({ ...cobro, amount: Number(cobro.amount) });
 }
 
 export async function PUT(req: Request, { params }: Ctx) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const cobro = await prisma.accountPayment.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
   });
-  if (!cobro) return NOT_FOUND;
+  if (!cobro) return notFound();
 
   if (cobro.status === "cancelled") {
     return NextResponse.json(
@@ -59,32 +60,7 @@ export async function PUT(req: Request, { params }: Ctx) {
       },
     });
 
-    const [txSum, paySum] = await Promise.all([
-      tx.transaction.aggregate({
-        where: {
-          customerId: cobro.customerId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { totalAmount: true },
-      }),
-      tx.accountPayment.aggregate({
-        where: {
-          customerId: cobro.customerId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.customer.update({
-      where: { id: cobro.customerId },
-      data: {
-        balanceDue:
-          Number(txSum._sum.totalAmount ?? 0) - Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcCustomerBalance(tx, cobro.customerId, auth.tenantId);
 
     return c;
   });

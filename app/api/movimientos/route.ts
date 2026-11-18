@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { withTenant, NOT_FOUND } from "@/lib/api";
+import { withTenant, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcCustomerBalance } from "@/lib/balances";
 
 /**
  * Carga rápida estilo Excel: una sola fila puede generar un cargo ("debe" →
@@ -39,7 +40,7 @@ export const POST = withTenant(async (req, tenantId) => {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, tenantId },
   });
-  if (!customer) return NOT_FOUND;
+  if (!customer) return notFound();
 
   const movDate = date ? new Date(date) : new Date();
 
@@ -72,24 +73,7 @@ export const POST = withTenant(async (req, tenantId) => {
       });
     }
 
-    const [txSum, paySum] = await Promise.all([
-      tx.transaction.aggregate({
-        where: { customerId, tenantId, status: "active" },
-        _sum: { totalAmount: true },
-      }),
-      tx.accountPayment.aggregate({
-        where: { customerId, tenantId, status: "active" },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.customer.update({
-      where: { id: customerId },
-      data: {
-        balanceDue:
-          Number(txSum._sum.totalAmount ?? 0) - Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcCustomerBalance(tx, customerId, tenantId);
   });
 
   revalidatePath(`/clientes/${customerId}`);

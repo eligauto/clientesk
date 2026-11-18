@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
 type Ctx = { params: { id: string } };
 
 export async function DELETE(_req: Request, { params }: Ctx) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const customer = await prisma.customer.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
   });
-  if (!customer) return NOT_FOUND;
+  if (!customer) return notFound();
 
   await prisma.$transaction(async (tx) => {
     const transactions = await tx.transaction.findMany({
@@ -38,12 +38,12 @@ export async function DELETE(_req: Request, { params }: Ctx) {
 
 export async function GET(_req: Request, { params }: Ctx) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const customer = await prisma.customer.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
   });
-  if (!customer) return NOT_FOUND;
+  if (!customer) return notFound();
 
   return NextResponse.json({
     ...customer,
@@ -53,7 +53,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 
 export async function PUT(req: Request, { params }: Ctx) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const { name, phoneWhatsapp, address, notes } = await req.json();
 
@@ -74,7 +74,7 @@ export async function PUT(req: Request, { params }: Ctx) {
     },
   });
 
-  if (result.count === 0) return NOT_FOUND;
+  if (result.count === 0) return notFound();
 
   const updated = await prisma.customer.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },

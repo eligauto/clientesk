@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuth, UNAUTHORIZED } from "@/lib/api";
+import { getAuth, unauthorized } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const transactions = await prisma.transaction.findMany({
     where: { customerId: params.id, tenantId: auth.tenantId },

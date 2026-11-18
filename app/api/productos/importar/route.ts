@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getAuth, UNAUTHORIZED } from "@/lib/api";
+import { getAuth, unauthorized } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { calcPrices } from "@/lib/price-multipliers";
 
@@ -13,7 +13,7 @@ type Row = {
 
 export async function POST(req: NextRequest) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const { rows } = (await req.json()) as { rows: Row[] };
 

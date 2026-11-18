@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcCustomerBalance } from "@/lib/balances";
 import { PriceType } from "@prisma/client";
 
 export async function GET(
@@ -8,7 +9,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const transaction = await prisma.transaction.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
@@ -18,7 +19,7 @@ export async function GET(
     },
   });
 
-  if (!transaction) return NOT_FOUND;
+  if (!transaction) return notFound();
 
   return NextResponse.json({
     ...transaction,
@@ -33,12 +34,12 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const transaction = await prisma.transaction.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
   });
-  if (!transaction) return NOT_FOUND;
+  if (!transaction) return notFound();
 
   if (transaction.status === "cancelled") {
     return NextResponse.json(
@@ -88,32 +89,7 @@ export async function PUT(
       },
     });
 
-    const [txSum, paySum] = await Promise.all([
-      tx.transaction.aggregate({
-        where: {
-          customerId: transaction.customerId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { totalAmount: true },
-      }),
-      tx.accountPayment.aggregate({
-        where: {
-          customerId: transaction.customerId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.customer.update({
-      where: { id: transaction.customerId },
-      data: {
-        balanceDue:
-          Number(txSum._sum.totalAmount ?? 0) - Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcCustomerBalance(tx, transaction.customerId, auth.tenantId);
 
     return t;
   });
