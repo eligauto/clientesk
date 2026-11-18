@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { withTenant, NOT_FOUND } from "@/lib/api";
+import { withTenant, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcSupplierBalance } from "@/lib/balances";
 import { PaymentMethod } from "@prisma/client";
 
 export const POST = withTenant(async (req, tenantId) => {
@@ -25,7 +26,7 @@ export const POST = withTenant(async (req, tenantId) => {
   const supplier = await prisma.supplier.findFirst({
     where: { id: supplierId, tenantId },
   });
-  if (!supplier) return NOT_FOUND;
+  if (!supplier) return notFound();
 
   const pago = await prisma.$transaction(async (tx) => {
     const p = await tx.supplierPayment.create({
@@ -39,25 +40,7 @@ export const POST = withTenant(async (req, tenantId) => {
       },
     });
 
-    const [purchaseSum, paySum] = await Promise.all([
-      tx.purchase.aggregate({
-        where: { supplierId, tenantId, status: "active" },
-        _sum: { totalAmount: true },
-      }),
-      tx.supplierPayment.aggregate({
-        where: { supplierId, tenantId, status: "active" },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.supplier.update({
-      where: { id: supplierId },
-      data: {
-        balanceDue:
-          Number(purchaseSum._sum.totalAmount ?? 0) -
-          Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcSupplierBalance(tx, supplierId, tenantId);
 
     return p;
   });

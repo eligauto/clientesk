@@ -25,12 +25,14 @@ export async function getAuth(): Promise<{ tenantId: string } | null> {
   return { tenantId: session.user.tenantId };
 }
 
-export const UNAUTHORIZED = NextResponse.json(
-  { error: "No autorizado", code: "UNAUTHORIZED" },
-  { status: 401 }
-);
+export const unauthorized = () =>
+  NextResponse.json(
+    { error: "No autorizado", code: "UNAUTHORIZED" },
+    { status: 401 }
+  );
 
-export const NOT_FOUND = NextResponse.json(
-  { error: "No encontrado", code: "NOT_FOUND" },
-  { status: 404 }
-);
+export const notFound = () =>
+  NextResponse.json(
+    { error: "No encontrado", code: "NOT_FOUND" },
+    { status: 404 }
+  );

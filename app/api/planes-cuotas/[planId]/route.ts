@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuth, NOT_FOUND, UNAUTHORIZED } from "@/lib/api";
+import { getAuth, notFound, unauthorized } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: { planId: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const plan = await prisma.paymentPlan.findFirst({
     where: { id: params.planId, tenantId: auth.tenantId },
@@ -17,6 +17,6 @@ export async function GET(
     },
   });
 
-  if (!plan) return NOT_FOUND;
+  if (!plan) return notFound();
   return NextResponse.json(plan);
 }

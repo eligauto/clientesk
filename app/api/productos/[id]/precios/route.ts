@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const p = await prisma.product.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     },
   });
 
-  if (!p) return NOT_FOUND;
+  if (!p) return notFound();
 
   return NextResponse.json({
     id: p.id,

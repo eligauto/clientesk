@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { calcPrices } from "@/lib/price-multipliers";
 import type { Product } from "@prisma/client";
@@ -24,7 +24,7 @@ export async function PUT(
   { params }: { params: { id: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const {
     sku,
@@ -61,7 +61,7 @@ export async function PUT(
     },
   });
 
-  if (result.count === 0) return NOT_FOUND;
+  if (result.count === 0) return notFound();
 
   const updated = await prisma.product.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },

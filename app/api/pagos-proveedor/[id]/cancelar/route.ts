@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getAuth, UNAUTHORIZED, NOT_FOUND } from "@/lib/api";
+import { getAuth, unauthorized, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { recalcSupplierBalance } from "@/lib/balances";
 
 export async function PATCH(
   _req: Request,
   { params }: { params: { id: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const pago = await prisma.supplierPayment.findFirst({
     where: { id: params.id, tenantId: auth.tenantId },
   });
-  if (!pago) return NOT_FOUND;
+  if (!pago) return notFound();
 
   if (pago.status === "cancelled") {
     return NextResponse.json(
@@ -28,33 +29,7 @@ export async function PATCH(
       data: { status: "cancelled" },
     });
 
-    const [purchaseSum, paySum] = await Promise.all([
-      tx.purchase.aggregate({
-        where: {
-          supplierId: pago.supplierId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { totalAmount: true },
-      }),
-      tx.supplierPayment.aggregate({
-        where: {
-          supplierId: pago.supplierId,
-          tenantId: auth.tenantId,
-          status: "active",
-        },
-        _sum: { amount: true },
-      }),
-    ]);
-
-    await tx.supplier.update({
-      where: { id: pago.supplierId },
-      data: {
-        balanceDue:
-          Number(purchaseSum._sum.totalAmount ?? 0) -
-          Number(paySum._sum.amount ?? 0),
-      },
-    });
+    await recalcSupplierBalance(tx, pago.supplierId, auth.tenantId);
   });
 
   revalidatePath(`/proveedores/${pago.supplierId}`);

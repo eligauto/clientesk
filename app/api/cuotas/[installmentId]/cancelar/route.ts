@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getAuth, NOT_FOUND, UNAUTHORIZED } from "@/lib/api";
+import { getAuth, notFound, unauthorized } from "@/lib/api";
 import { prisma } from "@/lib/db";
 
 export async function PATCH(
@@ -8,12 +8,12 @@ export async function PATCH(
   { params }: { params: { installmentId: string } },
 ) {
   const auth = await getAuth();
-  if (!auth) return UNAUTHORIZED;
+  if (!auth) return unauthorized();
 
   const installment = await prisma.paymentPlanInstallment.findFirst({
     where: { id: params.installmentId, tenantId: auth.tenantId },
   });
-  if (!installment) return NOT_FOUND;
+  if (!installment) return notFound();
 
   await prisma.paymentPlanInstallment.update({
     where: { id: params.installmentId },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { withTenant, NOT_FOUND } from "@/lib/api";
+import { withTenant, notFound } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { InstallmentFrequency } from "@prisma/client";
 
@@ -65,13 +65,13 @@ export const POST = withTenant(async (req, tenantId) => {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, tenantId },
   });
-  if (!customer) return NOT_FOUND;
+  if (!customer) return notFound();
 
   if (transactionId) {
     const tx = await prisma.transaction.findFirst({
       where: { id: transactionId, tenantId },
     });
-    if (!tx) return NOT_FOUND;
+    if (!tx) return notFound();
   }
 
   const baseDate = new Date(firstDueDate);
